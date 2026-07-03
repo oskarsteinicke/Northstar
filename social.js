@@ -120,7 +120,7 @@ function _renderJournalEditor(qs) {
 
 function _addJournalQ() {
   const qs = _getJournalQs().slice();
-  qs.push({ key: 'q' + Date.now(), label: 'New Question', placeholder: 'Your answer...' });
+  qs.push({ key: 'q' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), label: 'New Question', placeholder: 'Your answer...' });
   settings.journalQuestions = qs;
   LS.set('hvi_settings', settings);
   renderLibrary();

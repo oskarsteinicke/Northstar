@@ -139,32 +139,6 @@ function hasReadinessSignal() {
   return false;
 }
 
-// Home-screen indicator. Rendered just under the hero in renderHome().
-function readinessCardHTML() {
-  try {
-    if (!hasReadinessSignal()) return '';
-    const r = getReadiness();
-    const color = readinessColor(r.score);
-    const ringSvg = (typeof ring === 'function') ? ring(22, r.score / 100, 3, color) : '';
-    const f = r.factors;
-    const bits = [];
-    if (f.whoop != null) bits.push('Whoop ' + Math.round(f.whoop));
-    bits.push('Sleep ' + Math.round(f.sleep * 100) + '%');
-    bits.push('Load ' + (f.load >= 1 ? 'fresh' : f.load >= 0.7 ? 'moderate' : 'high'));
-    return `<div class="hm-readiness ani" onclick="showReadinessBreakdown()" role="button" tabindex="0" aria-label="Daily readiness ${r.score} out of 100, ${r.label}">
-      <div class="hm-rd-ring">${ringSvg}<div class="hm-rd-score" style="color:${color}">${r.score}</div></div>
-      <div class="hm-rd-body">
-        <div class="hm-rd-title">Readiness · <span style="color:${color}">${r.label}</span></div>
-        <div class="hm-rd-sub">${bits.join(' · ')}</div>
-      </div>
-      <div class="hm-rd-chev">›</div>
-    </div>`;
-  } catch (e) {
-    console.warn('[Arete] readiness card error:', e);
-    return '';
-  }
-}
-
 // ── PHASE 2: TRAINING DRIVES NUTRITION ───────────────────────────────────────
 // Weekly training schedule (0=Sun..6=Sat). Defaults from the active program's
 // day count; persisted to hvi_settings once the user edits it.
@@ -399,31 +373,6 @@ function getCoachNudge() {
     flags.sort((a, b) => b.sev - a.sev);
     return flags[0];
   } catch (e) { console.warn('[Arete] nudge error:', e); return null; }
-}
-
-function coachNudgeHTML() {
-  try {
-    if (localStorage.getItem('hvi_nudge_dismissed') === today()) return '';
-    const n = getCoachNudge();
-    if (!n) return '';
-    return `<div class="hm-nudge ani" id="coach-nudge" data-nudge="${n.id}">
-      <div class="hm-nudge-icon">${typeof icon === 'function' ? icon(n.icon, 22) : ''}</div>
-      <div class="hm-nudge-body">
-        <div class="hm-nudge-title">Coach noticed</div>
-        <div class="hm-nudge-text">${n.text}</div>
-        <div class="hm-nudge-actions">
-          <button class="hm-nudge-btn" onclick="if(typeof openCoach==='function')openCoach()">Talk to coach</button>
-          <button class="hm-nudge-x" onclick="dismissCoachNudge()">Dismiss</button>
-        </div>
-      </div>
-    </div>`;
-  } catch { return ''; }
-}
-
-function dismissCoachNudge() {
-  try { localStorage.setItem('hvi_nudge_dismissed', today()); } catch {}
-  const el = document.getElementById('coach-nudge');
-  if (el) el.remove();
 }
 
 // ── PHASE 5: UNIFIED "TODAY" BRIEFING ────────────────────────────────────────

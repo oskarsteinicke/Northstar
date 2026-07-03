@@ -1500,7 +1500,7 @@ function renderHome() {
 
   document.getElementById('view').innerHTML = `
     <div class="hm-hero ani">
-      <div class="hm-hero-card hm-hero-card--center" onclick="go('character')">
+      <div class="hm-hero-card hm-hero-card--center" onclick="go('character')" role="button" tabindex="0" aria-label="Open your character" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();go('character')}">
         <div class="hm-hero-glow"></div>
         <div class="hm-hero-date">${dateStr}</div>
         <div class="avatar-frame hm-hero-portrait">${avatarImg(homeLvl)}</div>

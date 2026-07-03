@@ -1424,7 +1424,8 @@ nav {
 }
 
 /* ═══ ANIMATED AVATAR BREATHING ══════════════════════════════════════ */
-.hm-hero-card svg { animation: avatar-breathe 3s ease-in-out infinite; transform-origin: bottom center; }
+.hm-hero-card svg,
+.hm-hero-portrait .avatar-img { animation: avatar-breathe 3s ease-in-out infinite; transform-origin: bottom center; }
 @keyframes avatar-breathe {
   0%, 100% { transform: scaleY(1); }
   50% { transform: scaleY(1.02) translateY(-1px); }
@@ -1926,11 +1927,6 @@ nav {
 .lb-leave-btn { color: var(--fat) !important; border-color: rgba(239,68,68,0.2) !important; }
 
 /* ── Home Stats Mini Bar ───────────────────────────────────────────────── */
-.hm-stats-mini { display: flex; justify-content: space-around; margin: 0 16px 12px; padding: 10px 8px; background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius); cursor: pointer; transition: border-color .2s; }
-.hm-stats-mini:active { border-color: var(--accent); }
-.hm-sm-stat { text-align: center; flex: 1; }
-.hm-sm-val { font-family: var(--serif); font-size: 20px; font-weight: 700; line-height: 1.2; }
-.hm-sm-lbl { font-size: 10px; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 2px; }
 
 /* ── Character Profile Page ────────────────────────────────────────────── */
 .char-hero { text-align: center; padding: 0 24px 20px; }
@@ -2470,6 +2466,21 @@ body {
     radial-gradient(ellipse 130% 60% at 50% 110%, rgba(0,0,0,0.06) 0%, transparent 60%);
 }
 
+/* Light theme for connected-system / paywall / why-goals components
+   (their dark gradients are hardcoded and don't follow the vars) */
+[data-theme="light"] .today-brief,
+[data-theme="light"] .pw-card,
+[data-theme="light"] .rd-sheet,
+[data-theme="light"] .why-modal-sheet {
+  background: var(--surface);
+}
+[data-theme="light"] .rd-bar { background: rgba(0,0,0,0.08); }
+[data-theme="light"] .pw-close,
+[data-theme="light"] .rd-close { background: rgba(0,0,0,0.05); color: var(--text-dim); }
+[data-theme="light"] .tb-cell { border: 1px solid var(--border2); }
+/* The avatar frame stays dark on purpose — the character art has a black
+   background, so in light mode it reads as a framed portrait. */
+
 /* ══ GUEST MODE (account nudges) ════════════════════════════════════════ */
 .guest-cta {
   padding: 16px; border-radius: var(--radius);
@@ -2632,7 +2643,7 @@ body {
 .rd-action-btn .ic { margin-right: 7px; }
 .rd-hint .ic { vertical-align: -2px; }
 .hm-card-sub .ic { vertical-align: -1px; }
-.hm-nudge-icon .ic, .tb-coach-ico .ic { color: var(--accent-b); }
+.tb-coach-ico .ic { color: var(--accent-b); }
 .link-btn .ic { margin-right: 5px; vertical-align: -3px; }
 .dm-icon .ic { vertical-align: -3px; color: var(--accent-b); }
 .tb-cell-val { font-family: var(--serif); font-size: 18px; color: var(--text); line-height: 1.1; }
@@ -2663,27 +2674,6 @@ body {
   cursor: pointer; font-size: 12px; font-weight: 600; padding: 7px 14px; border-radius: 9px; flex-shrink: 0;
 }
 
-/* ══ CONNECTED SYSTEM: READINESS ════════════════════════════════════════ */
-.hm-readiness {
-  display: flex; align-items: center; gap: 14px;
-  margin: 0 16px 12px; padding: 14px 16px;
-  background: linear-gradient(135deg, rgba(176,132,72,0.10), rgba(176,132,72,0.02));
-  border: 1px solid var(--border2); border-radius: var(--radius);
-  cursor: pointer; transition: border-color 0.2s, transform 0.1s;
-}
-.hm-readiness:active { transform: scale(0.99); }
-.hm-readiness:hover { border-color: rgba(217,180,106,0.35); }
-.hm-rd-ring { position: relative; width: 50px; height: 50px; flex-shrink: 0; }
-.hm-rd-ring svg { width: 50px; height: 50px; }
-.hm-rd-score {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  font-family: var(--serif); font-size: 16px; font-weight: 600;
-}
-.hm-rd-body { flex: 1; min-width: 0; }
-.hm-rd-title { font-size: 14px; color: var(--text); font-weight: 500; }
-.hm-rd-sub { font-size: 11px; color: var(--text-muted); margin-top: 3px; letter-spacing: 0.2px; }
-.hm-rd-chev { color: var(--text-muted); font-size: 20px; flex-shrink: 0; }
-
 /* ══ CONNECTED SYSTEM: NUTRITION ADJUSTMENT BADGE ═══════════════════════ */
 .d-adjust-badge {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -2694,30 +2684,6 @@ body {
 .d-adjust-main { font-size: 12px; color: var(--text); font-weight: 500; }
 .d-adjust-base { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
 .hi-auto { font-size: 11px; opacity: 0.65; margin-left: 3px; }
-
-/* ══ CONNECTED SYSTEM: PROACTIVE COACH NUDGE ════════════════════════════ */
-.hm-nudge {
-  display: flex; gap: 12px; align-items: flex-start;
-  margin: 0 16px 12px; padding: 14px 16px;
-  background: linear-gradient(135deg, rgba(176,132,72,0.16), rgba(176,132,72,0.04));
-  border: 1px solid rgba(217,180,106,0.3); border-radius: var(--radius);
-}
-.hm-nudge-icon { font-size: 24px; line-height: 1.1; flex-shrink: 0; }
-.hm-nudge-body { flex: 1; min-width: 0; }
-.hm-nudge-title {
-  font-family: var(--display); font-size: 11px; letter-spacing: 1.5px;
-  text-transform: uppercase; color: var(--accent-b); margin-bottom: 4px;
-}
-.hm-nudge-text { font-size: 13px; color: var(--text); line-height: 1.5; }
-.hm-nudge-actions { display: flex; gap: 8px; margin-top: 10px; }
-.hm-nudge-btn {
-  background: var(--accent); color: #1a1209; border: none; cursor: pointer;
-  font-size: 12px; font-weight: 600; padding: 7px 14px; border-radius: 9px;
-}
-.hm-nudge-x {
-  background: none; border: none; color: var(--text-muted); cursor: pointer;
-  font-size: 12px; padding: 7px 6px;
-}
 
 /* ══ PAYWALL / PREMIUM ══════════════════════════════════════════════════ */
 .pw-overlay {
