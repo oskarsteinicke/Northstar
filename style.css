@@ -5,9 +5,9 @@ body, #app, .view, nav, .coach-panel { transition: background-color 0.2s ease, c
 :root {
   /* Monochrome-minimal palette: near-black, bold white modern type, and gold
      reserved as the single warm accent — the one lit window in a dark tower. */
-  --bg: #0a0a0b;
-  --surface: #151517;
-  --surface2: #1f1f23;
+  --bg: #101012;
+  --surface: #1a1a1e;
+  --surface2: #242429;
   --border: rgba(255,255,255,0.10);
   --border2: rgba(255,255,255,0.06);
   --text: #f2f1ee;
@@ -16,11 +16,11 @@ body, #app, .view, nav, .coach-panel { transition: background-color 0.2s ease, c
   --accent: #b8874a;
   --accent-b: #e3b878;
   --card-shadow: 0 6px 28px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.05);
-  --nav-h: 64px;
+  --nav-h: 76px; /* floating pill nav: 62px tall + 10px bottom offset */
   --serif: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
   --display: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
-  --radius: 16px;
-  --radius-sm: 10px;
+  --radius: 18px;
+  --radius-sm: 12px;
   --cal: #e3b878;
   --pro: #6e9fd4;
   --carb: #6fd48e;
@@ -61,19 +61,22 @@ body {
 /* NAV */
 nav {
   position: fixed;
-  bottom: 0;
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   left: 50%;
   transform: translateX(-50%);
-  width: 100%;
-  max-width: 480px;
-  height: var(--nav-h);
-  background: rgba(10,10,11,0.92);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-top: 1px solid rgba(255,255,255,0.06);
+  width: calc(100% - 28px);
+  max-width: 452px;
+  height: 62px;
+  background: rgba(24,24,28,0.84);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 31px;
+  box-shadow: 0 10px 36px rgba(0,0,0,0.55);
   display: flex;
-  align-items: flex-start;
-  padding-top: 8px;
+  align-items: stretch;
+  padding: 6px;
+  gap: 2px;
   z-index: 100;
 }
 
@@ -82,22 +85,24 @@ nav {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 3px;
   background: none;
   border: none;
+  border-radius: 25px;
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.3px;
-  text-transform: uppercase;
-  transition: color 0.2s;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  text-transform: none;
+  transition: color 0.2s, background 0.2s;
   padding: 0;
   position: relative;
 }
 .ni svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; transition: stroke-width 0.2s; }
-.ni.active { color: var(--accent-b); }
-.ni.active svg { stroke-width: 2; }
+.ni.active { color: var(--text); background: rgba(255,255,255,0.07); }
+.ni.active svg { stroke-width: 2; stroke: var(--accent-b); }
 .ni.active::before {
   content: '';
   position: absolute;
@@ -493,13 +498,13 @@ nav {
   width: calc(100% - 48px);
   margin: 16px 24px 24px;
   padding: 14px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 14px;
   color: var(--text);
   font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 1.2px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
   text-transform: uppercase;
   text-align: center;
   cursor: pointer;
@@ -711,8 +716,8 @@ nav {
 /* Hero card */
 .hm-hero { padding: 16px 16px 0; }
 .hm-hero-card {
-  background: linear-gradient(160deg, var(--surface) 0%, rgba(176,132,72,.06) 100%);
-  border: 1px solid var(--border);
+  background: var(--surface);
+  border: 1px solid var(--border2);
   border-radius: 24px;
   padding: 22px 20px 20px;
   position: relative;
@@ -1984,10 +1989,9 @@ nav {
   box-shadow: var(--card-shadow);
 }
 
-/* Hero card — richer gradient + stronger shadow */
+/* Hero card — clean elevated surface */
 .hm-hero-card {
-  background: linear-gradient(160deg, var(--surface) 0%, rgba(176,132,72,.10) 100%);
-  box-shadow: 0 4px 28px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05);
 }
 
 /* Pillar card glow when active/selected */
@@ -2313,6 +2317,7 @@ nav {
 
 /* ── Film grain — the #1 premium detail ─────────────────────────── */
 #grain {
+  display: none; /* retired with the CTRL-style clean redesign */
   position: fixed;
   inset: 0;
   pointer-events: none;
@@ -2803,3 +2808,31 @@ body {
 }
 /* Soul moments stay serif: the Why, the daily quote, the wisdom block */
 .why-quote, .hm-quote-text, .q-text { font-family: var(--serif); }
+
+/* Numbers and stat values go modern sans-bold (serif stays only for the
+   soul moments above) */
+.hm-card-val, .hm-score-num, .hm-vital-val, .hm-streak-num, .s-val,
+.tb-cell-val, .tb-cell-sub, .tb-ready-num, .rd-score-num, .rd-factor-val,
+.rd-vital-val, .wir-stat-val, .char-power, .char-stat-val, .lb-xp, .pd-pct,
+.dm-header-text, .h-sum-title, .lb-group-name, .chal-card-name {
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* XP amounts as pills (CTRL-style chips) */
+.hm-quest-xp {
+  display: inline-block;
+  background: rgba(227,184,120,0.12);
+  color: var(--accent-b);
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+/* Bigger focal progress ring on the Today briefing */
+.tb-ready-ring { width: 54px; height: 54px; }
+.tb-ready-ring svg { width: 54px; height: 54px; }
+.tb-ready-num { font-size: 16px; }
