@@ -179,7 +179,11 @@ function _intensityFromDayName(name) {
 function classifyTodaySession() {
   const t = today();
   const wl = (typeof workoutLog !== 'undefined' && workoutLog) ? workoutLog[t] : null;
-  if (wl && wl.exercises && wl.exercises.length) {
+  // Only a session with actual completed work counts as trained — opening the
+  // workout screen auto-creates an empty entry, which must not flip macros.
+  const trained = (typeof workoutDoneToday === 'function') ? workoutDoneToday()
+    : !!(wl && (wl.source || (wl.exercises || []).some(e => (e.sets || []).some(s => s.completed))));
+  if (wl && trained) {
     return { type: _intensityFromDayName(wl.dayName), dayName: wl.dayName || null, source: 'logged' };
   }
   const dow = new Date().getDay();
@@ -514,7 +518,8 @@ function todayBriefingHTML() {
     const sess = classifyTodaySession();
 
     const wEntry = (typeof workoutLog !== 'undefined' && workoutLog) ? workoutLog[t] : null;
-    const wLogged = !!wEntry;
+    const wLogged = (typeof workoutDoneToday === 'function') ? workoutDoneToday()
+      : !!(wEntry && (wEntry.source || (wEntry.exercises || []).some(e => (e.sets || []).some(s => s.completed))));
     const trainVal = wLogged ? 'Done' : (sess.type === 'rest' ? 'Rest' : (sess.dayName || 'Train'));
     const trainLbl = wLogged ? 'Workout' : (sess.type === 'rest' ? 'Recovery' : (sess.type === 'hard' ? 'Heavy day' : 'Training'));
 

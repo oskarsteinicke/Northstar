@@ -222,7 +222,7 @@ function renderWorkout() {
       <div class="w-card-desc">${esc(day.focus)}</div>
       ${muscleTagsHTML ? `<div class="w-muscle-tags">${muscleTagsHTML}</div>` : ''}
       ${exPreviewHTML}
-      <div class="w-hero-cta ${todayLog ? 'done' : ''}">${todayLog ? '✓ Workout logged today' : '→ Start today\'s workout'}</div>
+      <div class="w-hero-cta ${workoutDoneToday() ? 'done' : ''}">${workoutDoneToday() ? '✓ Workout logged today' : '→ Start today\'s workout'}</div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 24px 8px">
       <button class="w-action-btn" style="margin:0;width:100%" onclick="go('workoutPicker')">Programs</button>

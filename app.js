@@ -1179,6 +1179,15 @@ function isHabitDueToday(h) {
 function pillarPct(pid) { const ph = pillarHabits(pid).filter(isHabitDueToday); if (!ph.length) return {done:0,total:0,pct:0}; const d = ph.filter(h => log[h.id]?.completedToday).length; return {done:d,total:ph.length,pct:d/ph.length}; }
 function totalPct() { const d = habits.filter(h => log[h.id]?.completedToday).length; return {done:d,total:habits.length,pct:habits.length?d/habits.length:0}; }
 
+// A day only counts as trained if at least one set was completed (or the entry
+// came from an external source like Strava). Opening the workout screen
+// auto-creates an empty log entry, which must never count as training.
+function trainedOnDay(dateKey) {
+  const w = (workoutLog || {})[dateKey];
+  return !!(w && (w.source || (w.exercises || []).some(e => (e.sets || []).some(s => s.completed))));
+}
+function workoutDoneToday() { return trainedOnDay(today()); }
+
 function habitRowHTML(h, suffix = '', editMode = false) {
   const e = log[h.id] || {}, s = e.streak || 0;
   const due = isHabitDueToday(h);
@@ -1431,7 +1440,7 @@ function renderHome() {
   // Workout card
   const wProg = findProgram(workoutMeta.activeProgram) || WORKOUT_PROGRAMS[0];
   const wDay = wProg.days[workoutMeta.currentDayIndex % wProg.days.length];
-  const wLogged = !!workoutLog[today()];
+  const wLogged = workoutDoneToday();
   const wEntry = workoutLog[today()];
   const wExternal = wEntry?.source;
   const wExtraBadges = wExternal ? [
@@ -2268,12 +2277,13 @@ function getRecoveryStatus() {
   for (const d of dates) {
     const diff = Math.floor((now - new Date(d + 'T12:00')) / 86400000);
     if (diff > 7) break;
+    if (!trainedOnDay(d)) continue; // opened-but-empty entries don't count
     workoutsLast7++;
     const w = workoutLog[d];
     if (w && w.exercises) {
       w.exercises.forEach(ex => {
         (ex.sets || []).forEach(s => {
-          if (!s.warmup && s.kg && s.reps) totalVolume += s.kg * s.reps;
+          if (!s.warmup && s.completed && s.weight && s.reps) totalVolume += s.weight * s.reps;
         });
       });
     }
@@ -2283,7 +2293,7 @@ function getRecoveryStatus() {
   for (let i = 0; i < 7; i++) {
     const d = new Date(now); d.setDate(d.getDate() - i);
     const key = d.toISOString().slice(0, 10);
-    if (workoutLog[key]) consecutiveDays++;
+    if (trainedOnDay(key)) consecutiveDays++;
     else break;
   }
 
