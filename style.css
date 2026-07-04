@@ -5,9 +5,9 @@ body, #app, .view, nav, .coach-panel { transition: background-color 0.2s ease, c
 :root {
   /* Monochrome-minimal palette: near-black, bold white modern type, and gold
      reserved as the single warm accent — the one lit window in a dark tower. */
-  --bg: #101012;
-  --surface: #1a1a1e;
-  --surface2: #242429;
+  --bg: #0c0c0d;
+  --surface: #161618;
+  --surface2: #202023;
   --border: rgba(255,255,255,0.10);
   --border2: rgba(255,255,255,0.06);
   --text: #f2f1ee;
@@ -2848,3 +2848,16 @@ body {
 .w-ex-done { opacity: 0.5; transition: opacity 0.25s ease; }
 .w-ex-done:active, .w-ex-done:hover { opacity: 0.85; }
 .w-ex-done .w-ex-name::after { content: " ✓"; color: var(--carb); }
+
+/* ══ BLACK & GOLD IDENTITY ══════════════════════════════════════════════
+   Gold carries every screen the way the Diet section does: section labels
+   in letterspaced gold caps, key values in gold, supporting labels and body
+   text in white-grey. */
+.sec-lbl, .hm-sec-title, .tb-eyebrow, .why-eyebrow, .rd-score-cap,
+.hm-hero-date, .w-day-badge {
+  color: var(--accent-b);
+}
+.s-val, .hm-card-val, .hm-vital-val, .tb-cell-val, .wir-stat-val,
+.char-power, .char-stat-val, .lb-xp, .da-stat-val, .hm-streak-num {
+  color: var(--accent-b);
+}
