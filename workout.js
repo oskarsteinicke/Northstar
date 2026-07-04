@@ -272,6 +272,42 @@ function selectProgram(id) {
   go('workout');
 }
 
+// ── LIVE-SESSION SURGICAL UPDATES ───────────────────────────────────────
+// Set actions update the DOM in place (no full re-render): no scroll jump,
+// no phantom history entries, no keyboard dismissal mid-set.
+let _wExInfoOpen = new Set(); // exerciseIds whose info panel is open (per session)
+
+function _setRowHTML(ei, si, s) {
+  const isWarmup = s.warmup;
+  return `
+      <div class="w-set${isWarmup ? ' w-set-warmup' : ''}" id="w-set-${ei}-${si}">
+        <span class="w-set-num" id="w-setnum-${ei}-${si}" onclick="toggleWarmup(${ei},${si})" title="${isWarmup ? 'Warmup set — tap to make working' : 'Tap to mark as warmup'}" style="cursor:pointer">${isWarmup ? 'W' : si + 1}</span>
+        <input class="w-input" type="number" inputmode="decimal" value="${s.weight || ''}" placeholder="${wtUnit()}" aria-label="Weight set ${si + 1}" onfocus="this.select()" oninput="updateSet(${ei},${si},'weight',this.value)">
+        <span class="w-input-label" aria-hidden="true">×</span>
+        <input class="w-input" type="number" inputmode="decimal" value="${s.reps || ''}" placeholder="reps" aria-label="Reps set ${si + 1}" onfocus="this.select()" oninput="updateSet(${ei},${si},'reps',this.value)">
+        <div class="w-set-check${s.completed ? ' done' : ''}" id="w-check-${ei}-${si}" onclick="toggleSet(${ei},${si})" role="checkbox" aria-checked="${!!s.completed}" aria-label="Complete set ${si + 1}" tabindex="0">✓</div>
+      </div>`;
+}
+
+// Dim/mark an exercise card once every set in it is complete
+function _refreshExDone(ei) {
+  const t = today(), wl = workoutLog[t];
+  const card = document.getElementById(`w-ex-${ei}`);
+  if (!wl || !card || !wl.exercises[ei]) return;
+  const sets = wl.exercises[ei].sets;
+  card.classList.toggle('w-ex-done', sets.length > 0 && sets.every(s => s.completed));
+}
+
+// Full re-render that keeps the scroll position — only for structural changes
+// (reorder / swap), never for plain set taps.
+function rerenderWorkoutActive() {
+  const v = document.getElementById('view');
+  const st = v ? v.scrollTop : 0;
+  renderWorkoutActive();
+  const v2 = document.getElementById('view');
+  if (v2) v2.scrollTop = st;
+}
+
 function renderWorkoutActive() {
   const prog = findProgram(workoutMeta.activeProgram) || WORKOUT_PROGRAMS[0];
   const day = prog.days[workoutMeta.currentDayIndex % prog.days.length];
@@ -298,11 +334,23 @@ function renderWorkoutActive() {
 
   const wl = workoutLog[t];
 
-  // Trigger background fetch for any missing wger exercises
+  // Trigger background fetch for any missing wger exercises. When the data
+  // arrives, never yank the screen: if the user is typing, patch the name in
+  // place; otherwise re-render with the scroll position preserved.
   wl.exercises.forEach(we => {
     if (typeof we.exerciseId === 'number' && !wgerCache[we.exerciseId]) {
       wgerFetchExercise(we.exerciseId).then(ex => {
-        if (ex && curView === 'workoutActive') renderWorkoutActive();
+        if (!ex || curView !== 'workoutActive') return;
+        const ae = document.activeElement;
+        const typing = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA');
+        if (!typing) { rerenderWorkoutActive(); return; }
+        const cur = (workoutLog[today()] || {}).exercises || [];
+        const idx = cur.findIndex(w => w.exerciseId === we.exerciseId);
+        if (idx < 0) return;
+        const n = document.getElementById(`w-ex-name-${idx}`);
+        if (n) n.textContent = ex.name;
+        const m = document.getElementById(`w-ex-muscle-${idx}`);
+        if (m) m.textContent = ex.muscle || '';
       });
     }
   });
@@ -314,32 +362,22 @@ function renderWorkoutActive() {
     let tip = null;
     try { tip = getProgressionTip(we.exerciseId); } catch(e) {}
     const tipHTML = tip ? `<div class="w-ex-tip w-ex-tip-${tip.type}">${tip.msg}</div>` : '';
-    const setsHTML = we.sets.map((s, si) => {
-      const showPR = window._prJustSet && window._prJustSet.ei === ei && window._prJustSet.si === si;
-      const isWarmup = s.warmup;
-      return `
-      <div class="w-set${isWarmup ? ' w-set-warmup' : ''}">
-        <span class="w-set-num" onclick="toggleWarmup(${ei},${si})" title="${isWarmup ? 'Warmup set — tap to make working' : 'Tap to mark as warmup'}" style="cursor:pointer">${isWarmup ? 'W' : si+1}</span>
-        <input class="w-input" type="number" inputmode="decimal" value="${s.weight||''}" placeholder="${wtUnit()}" aria-label="Weight set ${si+1}" onfocus="this.select()" oninput="updateSet(${ei},${si},'weight',this.value)">
-        <span class="w-input-label" aria-hidden="true">×</span>
-        <input class="w-input" type="number" inputmode="decimal" value="${s.reps||''}" placeholder="reps" aria-label="Reps set ${si+1}" onfocus="this.select()" oninput="updateSet(${ei},${si},'reps',this.value)">
-        <div class="w-set-check${s.completed?' done':''}" onclick="toggleSet(${ei},${si})" role="checkbox" aria-checked="${!!s.completed}" aria-label="Complete set ${si+1}" tabindex="0">✓</div>
-        ${showPR ? '<span class="pr-badge">🏆 New PR!</span>' : ''}
-      </div>`;
-    }).join('');
+    const setsHTML = we.sets.map((s, si) => _setRowHTML(ei, si, s)).join('');
     const canRemove = we.sets.length > 1;
     const muscles = ex && ex.muscles && ex.muscles.length ? ex.muscles.join(', ') : '';
     const desc = ex && ex.description ? ex.description.slice(0, 150) : '';
     const img = ex && ex.image ? `<img src="${ex.image}" style="max-width:100%;border-radius:8px;margin-top:6px">` : '';
-    const infoHTML = (muscles || desc) ? `<div class="w-ex-info" id="w-ex-info-${ei}" style="display:none">
+    const infoOpen = _wExInfoOpen.has(String(we.exerciseId));
+    const infoHTML = (muscles || desc) ? `<div class="w-ex-info" id="w-ex-info-${ei}" style="display:${infoOpen ? 'block' : 'none'}">
       ${muscles ? `<div style="font-size:11px;color:var(--accent-b);margin-bottom:4px">💪 ${esc(muscles)}</div>` : ''}
       ${desc ? `<div style="font-size:11px;color:var(--text-dim);line-height:1.4">${esc(desc)}</div>` : ''}
       ${img}
     </div>` : '';
     const canMoveUp = ei > 0;
     const canMoveDown = ei < wl.exercises.length - 1;
-    return `<div class="w-ex ani">
-      <div class="w-ex-head" onclick="toggleExInfo(${ei})"><div><div class="w-ex-name">${esc(name)}</div><div class="w-ex-muscle">${esc(muscle)}${muscles || desc ? ' <span style=&quot;font-size:9px;opacity:0.5&quot;>ⓘ</span>' : ''}</div></div>${buildExerciseSparkline(we.exerciseId)}</div>
+    const allDone = we.sets.length > 0 && we.sets.every(s => s.completed);
+    return `<div class="w-ex ani${allDone ? ' w-ex-done' : ''}" id="w-ex-${ei}">
+      <div class="w-ex-head" onclick="toggleExInfo(${ei})"><div><div class="w-ex-name" id="w-ex-name-${ei}">${esc(name)}</div><div class="w-ex-muscle" id="w-ex-muscle-${ei}">${esc(muscle)}${muscles || desc ? ' <span style=&quot;font-size:9px;opacity:0.5&quot;>ⓘ</span>' : ''}</div></div>${buildExerciseSparkline(we.exerciseId)}</div>
       <div class="w-ex-actions">
         ${canMoveUp ? `<button class="w-ex-act-btn" onclick="reorderExercise(${ei},-1)" title="Move up">↑</button>` : ''}
         ${canMoveDown ? `<button class="w-ex-act-btn" onclick="reorderExercise(${ei},1)" title="Move down">↓</button>` : ''}
@@ -347,10 +385,10 @@ function renderWorkoutActive() {
       </div>
       ${infoHTML}
       ${tipHTML}
-      ${setsHTML}
+      <div id="w-sets-${ei}">${setsHTML}</div>
       <div class="w-set-actions">
         <button class="w-add-set" onclick="addSet(${ei})">+ Add Set</button>
-        ${canRemove ? `<button class="w-add-set" style="color:var(--fat);opacity:0.7" onclick="removeSet(${ei},${we.sets.length-1})">− Remove Set</button>` : ''}
+        <button class="w-add-set" id="w-rm-${ei}" style="color:var(--fat);opacity:0.7;${canRemove ? '' : 'display:none'}" onclick="removeSet(${ei})">− Remove Set</button>
       </div></div>`;
   }).join('');
 
@@ -368,10 +406,8 @@ function renderWorkoutActive() {
       <button class="rt-preset-btn" onclick="startRestTimer(90)">1:30</button>
       <button class="rt-preset-btn" onclick="startRestTimer(120)">2:00</button>
       <button class="rt-preset-btn" onclick="startRestTimer(180)">3:00</button>
-      <button class="rt-preset-btn" onclick="showPlateCalc()" style="margin-left:auto;background:var(--surface2);border:1px solid var(--border2)">🍽 Plates</button>
-    </div>
-    <div class="rt-presets" style="padding-top:0">
-      <button class="rt-preset-btn" onclick="show1RMCalc()" style="background:var(--surface2);border:1px solid var(--border2)">🧮 1RM</button>
+      <button class="rt-preset-btn" onclick="showPlateCalc()" style="margin-left:auto;background:var(--surface2);border:1px solid var(--border2)">Plates</button>
+      <button class="rt-preset-btn" onclick="show1RMCalc()" style="background:var(--surface2);border:1px solid var(--border2)">1RM</button>
     </div>
     <div class="w-notes-wrap">
       <div class="j-lbl" style="padding:0 0 8px">Workout Notes</div>
@@ -394,7 +430,14 @@ function updateSet(ei, si, field, val) {
 
 function toggleExInfo(ei) {
   const el = document.getElementById('w-ex-info-' + ei);
-  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  if (!el) return;
+  const open = el.style.display === 'none';
+  el.style.display = open ? 'block' : 'none';
+  // Remember by exerciseId (stable across reorders) so re-renders keep it open
+  try {
+    const eid = String(workoutLog[today()].exercises[ei].exerciseId);
+    if (open) _wExInfoOpen.add(eid); else _wExInfoOpen.delete(eid);
+  } catch {}
 }
 
 function toggleSet(ei, si) {
@@ -404,6 +447,14 @@ function toggleSet(ei, si) {
   set.completed = !set.completed;
   LS.set('hvi_workout_log', workoutLog);
   haptic(set.completed ? 12 : 6);
+
+  // In-place update: flip the checkmark, refresh the card's done state
+  const chk = document.getElementById(`w-check-${ei}-${si}`);
+  if (chk) {
+    chk.classList.toggle('done', set.completed);
+    chk.setAttribute('aria-checked', String(!!set.completed));
+  }
+  _refreshExDone(ei);
 
   if (set.completed) checkDailyQuests();
   if (set.completed && !set.warmup && set.weight > 0 && set.reps > 0) {
@@ -416,20 +467,15 @@ function toggleSet(ei, si) {
       prs[eid] = { weight: set.weight, reps: set.reps, date: t, name: ex ? ex.name : '' };
       LS.set('hvi_prs', prs);
       awardXP(100, 'body');
-      window._prJustSet = { ei, si };
-      setTimeout(() => {
-        if (window._prJustSet && window._prJustSet.ei === ei && window._prJustSet.si === si) {
-          window._prJustSet = null;
-          if (curView === 'workoutActive') {
-            document.querySelectorAll('.pr-badge').forEach(el => el.remove());
-          }
-        }
-      }, 2500);
+      const row = document.getElementById(`w-set-${ei}-${si}`);
+      if (row && !row.querySelector('.pr-badge')) {
+        row.insertAdjacentHTML('beforeend', '<span class="pr-badge">🏆 New PR!</span>');
+        setTimeout(() => { const b = row.querySelector('.pr-badge'); if (b) b.remove(); }, 2500);
+      }
     }
   }
   // Auto-start rest timer when completing a set
   if (set.completed) startRestTimer(restTimerDur);
-  go('workoutActive');
 }
 
 function addSet(ei) {
@@ -441,26 +487,49 @@ function addSet(ei) {
   const last = sets[sets.length - 1];
   sets.push({ weight: last?.weight || 0, reps: last?.reps || dr, completed: false });
   LS.set('hvi_workout_log', workoutLog);
-  go('workoutActive');
+  // Append the new row in place
+  const wrap = document.getElementById(`w-sets-${ei}`);
+  if (wrap) wrap.insertAdjacentHTML('beforeend', _setRowHTML(ei, sets.length - 1, sets[sets.length - 1]));
+  else { rerenderWorkoutActive(); return; }
+  const rm = document.getElementById(`w-rm-${ei}`);
+  if (rm) rm.style.display = '';
+  _refreshExDone(ei); // a fresh incomplete set un-dims a finished card
 }
 
-function removeSet(ei, si) {
+// Removes the last set of an exercise (keeps at least one)
+function removeSet(ei) {
   const t = today(), wl = workoutLog[t];
   if (!wl) return;
   const sets = wl.exercises[ei].sets;
   if (sets.length <= 1) return; // keep at least 1 set
-  sets.splice(si, 1);
+  sets.pop();
   LS.set('hvi_workout_log', workoutLog);
-  go('workoutActive');
+  // Remove the last row in place
+  const row = document.getElementById(`w-set-${ei}-${sets.length}`);
+  if (row) row.remove();
+  else { rerenderWorkoutActive(); return; }
+  if (sets.length <= 1) {
+    const rm = document.getElementById(`w-rm-${ei}`);
+    if (rm) rm.style.display = 'none';
+  }
+  _refreshExDone(ei);
 }
 
 // ── WARMUP SET TOGGLE ───────────────────────────────────────────────────
 function toggleWarmup(ei, si) {
   const t = today(), wl = workoutLog[t];
   if (!wl) return;
-  wl.exercises[ei].sets[si].warmup = !wl.exercises[ei].sets[si].warmup;
+  const s = wl.exercises[ei].sets[si];
+  s.warmup = !s.warmup;
   LS.set('hvi_workout_log', workoutLog);
-  go('workoutActive');
+  // Update the row in place
+  const row = document.getElementById(`w-set-${ei}-${si}`);
+  if (row) row.classList.toggle('w-set-warmup', !!s.warmup);
+  const num = document.getElementById(`w-setnum-${ei}-${si}`);
+  if (num) {
+    num.textContent = s.warmup ? 'W' : String(si + 1);
+    num.title = s.warmup ? 'Warmup set — tap to make working' : 'Tap to mark as warmup';
+  }
 }
 
 // ── EXERCISE REORDER ────────────────────────────────────────────────────
@@ -473,7 +542,7 @@ function reorderExercise(ei, dir) {
   wl.exercises[ei] = wl.exercises[newIdx];
   wl.exercises[newIdx] = tmp;
   LS.set('hvi_workout_log', workoutLog);
-  go('workoutActive');
+  rerenderWorkoutActive();
 }
 
 // ── EXERCISE SWAP ───────────────────────────────────────────────────────
@@ -495,7 +564,7 @@ function confirmSwapExercise(eid) {
   LS.set('hvi_workout_log', workoutLog);
   _swapExIdx = null;
   browserContext = null;
-  go('workoutActive');
+  go('workoutActive'); // navigating back from the exercise browser — real nav
 }
 
 // ── WORKOUT NOTES ───────────────────────────────────────────────────────

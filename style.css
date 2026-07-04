@@ -1090,23 +1090,30 @@ nav {
 
 /* ═══ REST TIMER ═══════════════════════════════════════════════════════════ */
 .rt-bar {
-  position: sticky;
-  bottom: 80px;
-  left: 0; right: 0;
-  background: var(--surface);
-  border: 1px solid rgba(176,132,72,0.3);
-  border-radius: 16px;
-  margin: 12px 24px;
-  padding: 12px 16px;
-  z-index: 10;
+  /* Floating countdown pill — always visible while resting, wherever you are */
+  position: fixed;
+  bottom: calc(var(--nav-h) + 14px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(calc(100% - 40px), 408px);
+  background: rgba(26,26,30,0.92);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(227,184,120,0.35);
+  border-radius: 999px;
+  margin: 0;
+  padding: 10px 18px;
+  box-shadow: 0 10px 32px rgba(0,0,0,0.55);
+  z-index: 95;
 }
 .rt-row { display: flex; align-items: center; gap: 12px; }
 .rt-time {
-  font-family: var(--serif);
-  font-size: 24px;
+  font-size: 22px;
   color: var(--accent-b);
   font-weight: 700;
   min-width: 52px;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 .rt-track { flex: 1; height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden; }
 .rt-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 0.3s; }
@@ -2836,3 +2843,8 @@ body {
 .tb-ready-ring { width: 54px; height: 54px; }
 .tb-ready-ring svg { width: 54px; height: 54px; }
 .tb-ready-num { font-size: 16px; }
+
+/* Live workout: completed exercises compress so the current one is obvious */
+.w-ex-done { opacity: 0.5; transition: opacity 0.25s ease; }
+.w-ex-done:active, .w-ex-done:hover { opacity: 0.85; }
+.w-ex-done .w-ex-name::after { content: " ✓"; color: var(--carb); }
