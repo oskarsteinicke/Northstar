@@ -31,9 +31,9 @@ html, body { height: 100%; overflow: hidden; }
 
 body {
   background-color: var(--bg);
+  /* One faint gold whisper from above — otherwise clean black */
   background-image:
-    radial-gradient(ellipse 95% 55% at 50% -2%, rgba(255,255,255,0.06) 0%, transparent 58%),
-    radial-gradient(ellipse 60% 45% at 50% 108%, rgba(0,0,0,0.5) 0%, transparent 60%);
+    radial-gradient(ellipse 90% 42% at 50% -4%, rgba(227,184,120,0.05) 0%, transparent 55%);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
   line-height: 1.55;
@@ -739,7 +739,7 @@ nav {
 }
 .hm-hero-card--center .hm-hero-glow {
   top: 30px; left: 50%; right: auto; transform: translateX(-50%);
-  width: 240px; height: 240px; opacity: 0.12;
+  width: 240px; height: 240px; opacity: 0.08;
 }
 .hm-hero-card--center .hm-hero-date { margin-bottom: 12px; }
 .hm-hero-portrait {
@@ -2848,6 +2848,23 @@ body {
 .w-ex-done { opacity: 0.5; transition: opacity 0.25s ease; }
 .w-ex-done:active, .w-ex-done:hover { opacity: 0.85; }
 .w-ex-done .w-ex-name::after { content: " ✓"; color: var(--carb); }
+
+/* ══ DESKTOP FRAME ══════════════════════════════════════════════════════
+   On wide screens the app reads as an intentional centered column on clean
+   black — no hazy gradients washing across the whole viewport. */
+@media (min-width: 700px) {
+  body { background-image: none; }
+  html:not([data-theme="light"]) body { background-color: #070708; }
+  #app {
+    background: var(--bg);
+    border-left: 1px solid var(--border2);
+    border-right: 1px solid var(--border2);
+    box-shadow: 0 0 90px rgba(0,0,0,0.85);
+  }
+  /* Keep the gold whisper inside the column only */
+  .view { background-image: radial-gradient(ellipse 100% 40% at 50% -4%, rgba(227,184,120,0.05) 0%, transparent 55%); }
+  [data-theme="light"] .view { background-image: none; }
+}
 
 /* ══ BLACK & GOLD IDENTITY ══════════════════════════════════════════════
    Gold carries every screen the way the Diet section does: section labels
