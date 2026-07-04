@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#0a0908">
+  <meta name="theme-color" content="#0c0c0d">
   <title>Arete — Become Your Greatest Self</title>
-  <meta name="description" content="Free habit tracker, workout logger, nutrition tracker & AI coach — all in one beautiful app. No subscriptions, no account required. Built for people serious about self-improvement.">
+  <meta name="description" content="Habits, workouts, nutrition, sleep and an AI coach in one connected system. Free to start, no signup — you're in in 5 seconds.">
   <!-- Open Graph -->
   <meta property="og:title" content="Arete — Become your greatest self">
-  <meta property="og:description" content="Habits, workouts, nutrition & AI coaching in one distraction-free app. Free, no account required, works offline.">
+  <meta property="og:description" content="One connected system for habits, training, nutrition and recovery. Free to start, no signup, works offline.">
   <meta property="og:image" content="https://get-arete.com/og-image.png">
   <meta property="og:url" content="https://get-arete.com">
   <meta property="og:type" content="website">
@@ -16,1061 +16,392 @@
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Arete — Become your greatest self">
-  <meta name="twitter:description" content="Habits, workouts, nutrition & AI coaching in one distraction-free app. Free forever.">
+  <meta name="twitter:description" content="One connected system for habits, training, nutrition and recovery. Free to start, no signup.">
   <meta name="twitter:image" content="https://get-arete.com/og-image.png">
   <!-- SEO -->
-  <meta name="keywords" content="habit tracker, workout logger, nutrition tracker, AI coach, self-improvement app, stoicism, free habit app, PWA, no subscription">
+  <meta name="keywords" content="habit tracker, workout logger, nutrition tracker, AI coach, self-improvement app, stoicism, readiness score, free habit app, PWA">
   <link rel="canonical" href="https://get-arete.com">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <!-- Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-4NQYVJR5S2"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-4NQYVJR5S2');
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,400;1,500&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:       #0a0908;
-      --bg2:      #0f0d0b;
-      --surface:  #141210;
-      --surface2: #1a1714;
-      --border:   rgba(255,255,255,0.07);
-      --border2:  rgba(255,255,255,0.04);
-      --accent:   #9a8256;
-      --accent-b: #c8a96e;
-      --accent-c: #e8c97e;
-      --text:     #f0ece4;
-      --text-dim: #a09880;
-      --text-muted: #5c5648;
-      --serif:    'Playfair Display', Georgia, serif;
-      --display:  'Cinzel', 'Playfair Display', Georgia, serif;
-      --sans:     'Inter', system-ui, sans-serif;
-      --glow:     rgba(154,130,86,0.12);
+      --bg:       #0c0c0d;
+      --surface:  #161618;
+      --surface2: #202023;
+      --border:   rgba(255,255,255,0.10);
+      --border2:  rgba(255,255,255,0.06);
+      --text:     #f2f1ee;
+      --text-dim: rgba(242,241,238,0.62);
+      --text-muted: rgba(242,241,238,0.38);
+      --gold:     #b8874a;
+      --gold-b:   #e3b878;
+      --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      --serif: 'Cormorant Garamond', Georgia, serif;
+      --radius: 18px;
     }
 
     html { scroll-behavior: smooth; }
-
     body {
       background: var(--bg);
+      background-image: radial-gradient(ellipse 90% 42% at 50% -4%, rgba(227,184,120,0.06) 0%, transparent 55%);
       color: var(--text);
       font-family: var(--sans);
-      font-size: 16px;
       line-height: 1.6;
-      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
     }
 
-    /* ── NAV ─────────────────────────────────────────────────────────────── */
-    nav {
-      position: fixed;
-      top: 0; left: 0; right: 0;
-      z-index: 100;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 20px 40px;
-      background: rgba(10,9,8,0.85);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+    /* ── Nav ── */
+    .nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(12,12,13,0.82);
+      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--border2);
     }
-    .nav-logo {
-      font-family: var(--display);
-      font-size: 20px;
-      color: var(--accent-b);
-      letter-spacing: 0.12em;
-    }
-    .nav-logo span { color: var(--text-muted); font-style: italic; font-weight: 400; }
+    .nav-inner { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; max-width: 1080px; margin: 0 auto; }
+    .wordmark { font-size: 14px; font-weight: 800; letter-spacing: 0.35em; color: var(--gold-b); text-decoration: none; }
     .nav-cta {
-      background: var(--accent);
-      color: #0a0908;
-      font-family: var(--sans);
-      font-size: 13px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      padding: 10px 22px;
-      border-radius: 100px;
-      border: none;
-      cursor: pointer;
-      text-decoration: none;
-      transition: background 0.2s, transform 0.15s;
+      background: var(--gold); color: #14100a; text-decoration: none;
+      font-size: 13px; font-weight: 700; padding: 9px 20px; border-radius: 999px;
+      transition: filter .2s;
     }
-    .nav-cta:hover { background: var(--accent-c); transform: translateY(-1px); }
+    .nav-cta:hover { filter: brightness(1.1); }
 
-    /* ── HERO ────────────────────────────────────────────────────────────── */
-    .hero {
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      padding: 120px 24px 80px;
-      position: relative;
-      overflow: hidden;
+    /* ── Hero ── */
+    .hero { padding: 72px 0 56px; text-align: center; }
+    .eyebrow {
+      display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.22em;
+      text-transform: uppercase; color: var(--gold-b); margin-bottom: 18px;
     }
-    .hero::before {
-      content: '';
-      position: absolute;
-      top: -200px; left: 50%;
-      transform: translateX(-50%);
-      width: 800px; height: 800px;
-      background: radial-gradient(ellipse, rgba(154,130,86,0.10) 0%, transparent 65%);
-      pointer-events: none;
+    .hero h1 {
+      font-size: clamp(38px, 6.5vw, 64px); font-weight: 800; line-height: 1.05;
+      letter-spacing: -0.03em; margin-bottom: 18px;
     }
-    .hero-star {
-      font-size: 36px;
-      margin-bottom: 28px;
-      display: block;
-      animation: pulse-star 3s ease-in-out infinite;
+    .hero h1 em { font-style: normal; color: var(--gold-b); }
+    .hero-sub {
+      font-size: clamp(16px, 2.2vw, 19px); color: var(--text-dim);
+      max-width: 620px; margin: 0 auto 30px;
     }
-    @keyframes pulse-star {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50%       { opacity: 0.7; transform: scale(0.92); }
-    }
-    .hero-eyebrow {
-      font-family: var(--display);
-      font-size: 10px;
-      letter-spacing: 5px;
-      text-transform: uppercase;
-      color: var(--accent);
-      font-weight: 500;
-      margin-bottom: 20px;
-    }
-    .hero-title {
-      font-family: var(--display);
-      font-size: clamp(38px, 7vw, 72px);
-      line-height: 1.1;
-      color: var(--text);
-      margin-bottom: 12px;
-      font-weight: 500;
-      letter-spacing: 1px;
-    }
-    .hero-title em {
-      font-style: italic;
-      font-family: var(--serif);
-      color: var(--accent-b);
-    }
-    .hero-subtitle {
-      font-family: var(--serif);
-      font-size: clamp(18px, 3vw, 26px);
-      color: var(--text-dim);
-      font-style: italic;
-      font-weight: 400;
-      margin-bottom: 28px;
-    }
-    .hero-desc {
-      font-size: 16px;
-      color: var(--text-dim);
-      max-width: 520px;
-      line-height: 1.75;
-      margin: 0 auto 48px;
-    }
-    .hero-actions {
-      display: flex;
-      gap: 14px;
-      align-items: center;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
+    .cta-row { display: flex; gap: 14px; justify-content: center; align-items: center; flex-wrap: wrap; }
     .btn-primary {
-      background: var(--accent);
-      color: #0a0908;
-      font-family: var(--sans);
-      font-size: 14px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      padding: 16px 36px;
-      border-radius: 100px;
-      border: none;
-      cursor: pointer;
-      text-decoration: none;
-      display: inline-block;
-      transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
-      box-shadow: 0 0 40px rgba(154,130,86,0.25);
+      background: linear-gradient(90deg, var(--gold), var(--gold-b));
+      color: #14100a; text-decoration: none; font-size: 16px; font-weight: 800;
+      padding: 16px 34px; border-radius: 999px;
+      box-shadow: 0 8px 30px rgba(184,135,74,0.28);
+      transition: transform .15s, filter .2s;
     }
-    .btn-primary:hover {
-      background: var(--accent-c);
-      transform: translateY(-2px);
-      box-shadow: 0 0 60px rgba(154,130,86,0.35);
-    }
-    .btn-secondary {
-      font-size: 13px;
-      color: var(--text-dim);
-      text-decoration: none;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      transition: color 0.2s;
-    }
-    .btn-secondary:hover { color: var(--accent-b); }
-    .btn-secondary svg { transition: transform 0.2s; }
-    .btn-secondary:hover svg { transform: translateX(3px); }
+    .btn-primary:hover { filter: brightness(1.07); transform: translateY(-1px); }
+    .cta-note { font-size: 13px; color: var(--text-muted); }
 
-    .hero-note {
-      margin-top: 28px;
-      font-size: 11px;
-      letter-spacing: 1px;
-      color: var(--text-muted);
+    .hero-figure { margin: 52px auto 0; width: min(300px, 72vw); }
+    .hero-portrait {
+      background: radial-gradient(120% 90% at 50% 25%, #15110b 0%, #000 78%);
+      border: 1px solid var(--border2); border-radius: 22px; overflow: hidden;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.6), 0 0 60px rgba(227,184,120,0.07);
+    }
+    .hero-portrait img { width: 100%; display: block; }
+    .hero-caption { margin-top: 14px; font-size: 12px; color: var(--text-muted); letter-spacing: 0.08em; text-transform: uppercase; }
+    .hero-caption b { color: var(--gold-b); font-weight: 700; }
+
+    /* ── Sections ── */
+    section { padding: 72px 0; }
+    .sec-head { text-align: center; margin-bottom: 44px; }
+    .sec-head h2 { font-size: clamp(28px, 4.5vw, 40px); font-weight: 800; letter-spacing: -0.02em; margin-bottom: 12px; }
+    .sec-head p { color: var(--text-dim); max-width: 560px; margin: 0 auto; }
+
+    .card {
+      background: var(--surface); border: 1px solid var(--border2);
+      border-radius: var(--radius); padding: 26px;
     }
 
-    /* ── DIVIDER ─────────────────────────────────────────────────────────── */
-    .divider {
-      display: flex;
-      align-items: center;
-      gap: 20px;
-      padding: 0 40px;
-      max-width: 900px;
-      margin: 0 auto;
+    /* Progression strip */
+    .stages { display: grid; grid-template-columns: repeat(6, 1fr); gap: 14px; }
+    .stage { text-align: center; }
+    .stage-img {
+      background: radial-gradient(120% 90% at 50% 25%, #15110b 0%, #000 78%);
+      border: 1px solid var(--border2); border-radius: 14px; overflow: hidden;
+      transition: transform .2s, border-color .2s;
     }
-    .divider-line { flex: 1; height: 1px; background: var(--border); }
-    .divider-star { color: var(--accent); font-size: 14px; }
-
-    /* ── PILLARS ─────────────────────────────────────────────────────────── */
-    .pillars-strip {
-      display: flex;
-      justify-content: center;
-      gap: 8px;
-      padding: 60px 24px 0;
-      flex-wrap: wrap;
-    }
-    .pillar-chip {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 100px;
-      padding: 8px 18px;
-      font-size: 12px;
-      color: var(--text-dim);
-      letter-spacing: 0.04em;
-      display: flex;
-      align-items: center;
-      gap: 7px;
-    }
-    .pillar-chip span { font-size: 15px; }
-
-    /* ── FEATURES ────────────────────────────────────────────────────────── */
-    .section {
-      padding: 100px 24px;
-      max-width: 1100px;
-      margin: 0 auto;
-    }
-    .section-eyebrow {
-      font-family: var(--display);
-      font-size: 10px;
-      letter-spacing: 5px;
-      text-transform: uppercase;
-      color: var(--accent);
-      font-weight: 500;
-      text-align: center;
-      margin-bottom: 16px;
-    }
-    .section-title {
-      font-family: var(--display);
-      font-size: clamp(28px, 4.5vw, 46px);
-      text-align: center;
-      line-height: 1.2;
-      margin-bottom: 16px;
-      letter-spacing: 0.5px;
-    }
-    .section-title em { font-style: italic; font-family: var(--serif); color: var(--accent-b); }
-    .section-sub {
-      font-size: 16px;
-      color: var(--text-dim);
-      text-align: center;
-      max-width: 520px;
-      margin: 0 auto 64px;
-      line-height: 1.75;
+    .stage:hover .stage-img { transform: translateY(-4px); border-color: rgba(227,184,120,0.35); }
+    .stage-img img { width: 100%; display: block; }
+    .stage-name { margin-top: 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; }
+    .stage-lv { font-size: 10px; color: var(--gold-b); letter-spacing: 0.12em; text-transform: uppercase; margin-top: 2px; }
+    .stage:last-child .stage-name { color: var(--gold-b); }
+    @media (max-width: 720px) {
+      .stages { display: flex; overflow-x: auto; gap: 12px; padding-bottom: 8px; scroll-snap-type: x mandatory; }
+      .stage { flex: 0 0 130px; scroll-snap-align: center; }
     }
 
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-      gap: 16px;
-    }
-    .feature-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 28px;
-      padding: 32px 28px;
-      position: relative;
-      overflow: hidden;
-      transition: border-color 0.2s, transform 0.2s;
-    }
-    .feature-card:hover {
-      border-color: rgba(154,130,86,0.3);
-      transform: translateY(-3px);
-    }
-    .feature-card::before {
-      content: '';
-      position: absolute;
-      top: -60px; right: -60px;
-      width: 160px; height: 160px;
-      border-radius: 50%;
-      background: var(--glow);
-      pointer-events: none;
-    }
-    .feature-icon {
-      font-size: 28px;
-      margin-bottom: 18px;
-      display: block;
-    }
-    .feature-title {
-      font-family: var(--display);
-      font-size: 19px;
-      color: var(--text);
-      margin-bottom: 10px;
-      letter-spacing: 0.3px;
-    }
-    .feature-desc {
-      font-size: 14px;
-      color: var(--text-dim);
-      line-height: 1.7;
-    }
-    .feature-tag {
-      display: inline-block;
-      margin-top: 18px;
-      font-size: 10px;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      color: var(--accent);
-      font-weight: 600;
-      background: rgba(154,130,86,0.08);
-      border: 1px solid rgba(154,130,86,0.15);
-      padding: 4px 10px;
-      border-radius: 100px;
+    /* Connected system trio */
+    .trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    @media (max-width: 820px) { .trio { grid-template-columns: 1fr; } }
+    .trio .card h3 { font-size: 17px; font-weight: 700; margin: 12px 0 8px; }
+    .trio .card p { font-size: 14px; color: var(--text-dim); }
+    .trio-num { font-size: 12px; font-weight: 800; color: var(--gold-b); letter-spacing: 0.16em; }
+
+    /* Features grid */
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    @media (max-width: 820px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } }
+    .feat h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+    .feat p { font-size: 13px; color: var(--text-dim); }
+    .feat .ic { color: var(--gold-b); margin-bottom: 10px; }
+
+    /* Pricing */
+    .plans { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 760px; margin: 0 auto; }
+    @media (max-width: 680px) { .plans { grid-template-columns: 1fr; } }
+    .plan-name { font-size: 13px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-dim); }
+    .plan-price { font-size: 34px; font-weight: 800; letter-spacing: -0.02em; margin: 8px 0 2px; }
+    .plan-price small { font-size: 14px; color: var(--text-muted); font-weight: 600; }
+    .plan-sub { font-size: 12px; color: var(--gold-b); margin-bottom: 16px; }
+    .plan ul { list-style: none; }
+    .plan li { font-size: 14px; color: var(--text-dim); padding: 6px 0; }
+    .plan li::before { content: "✓  "; color: var(--gold-b); font-weight: 700; }
+    .plan--premium { border-color: rgba(227,184,120,0.35); position: relative; }
+    .plan-badge {
+      position: absolute; top: -11px; left: 50%; transform: translateX(-50%);
+      background: var(--gold-b); color: #14100a; font-size: 10px; font-weight: 800;
+      letter-spacing: 0.08em; padding: 3px 12px; border-radius: 999px; white-space: nowrap;
     }
 
-    /* ── BIG FEATURE ROWS ────────────────────────────────────────────────── */
-    .big-features { padding: 0 24px 80px; max-width: 1100px; margin: 0 auto; }
-    .big-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 48px;
-      align-items: center;
-      padding: 60px 0;
-      border-top: 1px solid var(--border);
+    /* Story */
+    .story { max-width: 680px; margin: 0 auto; }
+    .story p { color: var(--text-dim); margin-bottom: 18px; font-size: 15.5px; }
+    .story p strong { color: var(--text); }
+    .story-quote {
+      font-family: var(--serif); font-style: italic; font-size: clamp(22px, 3.4vw, 30px);
+      color: var(--text); text-align: center; line-height: 1.35; margin: 0 0 36px;
     }
-    .big-row:first-child { border-top: none; }
-    .big-row.reverse .big-visual { order: -1; }
-    .big-text {}
-    .big-eyebrow {
-      font-size: 10px;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      color: var(--accent);
-      font-weight: 600;
-      margin-bottom: 14px;
+    .discord-card { display: flex; align-items: center; gap: 16px; margin-top: 28px; }
+    .discord-card .grow { flex: 1; min-width: 0; }
+    .discord-card h4 { font-size: 15px; font-weight: 700; }
+    .discord-card p { font-size: 12.5px; color: var(--text-muted); margin: 2px 0 0; }
+    .btn-ghost {
+      border: 1px solid var(--border); color: var(--text); text-decoration: none;
+      font-size: 13px; font-weight: 700; padding: 10px 20px; border-radius: 999px; white-space: nowrap;
+      transition: border-color .2s;
     }
-    .big-title {
-      font-family: var(--display);
-      font-size: clamp(24px, 3.5vw, 36px);
-      line-height: 1.2;
-      margin-bottom: 16px;
-      letter-spacing: 0.5px;
-    }
-    .big-title em { font-style: italic; font-family: var(--serif); color: var(--accent-b); }
-    .big-desc {
-      font-size: 15px;
-      color: var(--text-dim);
-      line-height: 1.8;
-      margin-bottom: 24px;
-    }
-    .big-bullets { list-style: none; display: flex; flex-direction: column; gap: 10px; }
-    .big-bullets li {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      font-size: 14px;
-      color: var(--text-dim);
-    }
-    .big-bullets li::before {
-      content: '‣';
-      color: var(--accent);
-      font-size: 10px;
-      margin-top: 4px;
-      flex-shrink: 0;
-    }
-    .big-visual {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 32px;
-      padding: 32px 24px;
-      position: relative;
-      overflow: hidden;
-    }
-    .big-visual::after {
-      content: '';
-      position: absolute;
-      bottom: -80px; left: 50%;
-      transform: translateX(-50%);
-      width: 300px; height: 300px;
-      border-radius: 50%;
-      background: var(--glow);
-      pointer-events: none;
-    }
+    .btn-ghost:hover { border-color: var(--gold-b); }
 
-    /* Mock UI elements */
-    .mock-head {
-      font-size: 10px;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      margin-bottom: 16px;
-    }
-    .mock-title {
-      font-family: var(--serif);
-      font-size: 22px;
-      color: var(--text);
-      margin-bottom: 20px;
-    }
-    .mock-bar-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 12px;
-    }
-    .mock-bar-label { font-size: 12px; color: var(--text-dim); width: 70px; flex-shrink: 0; }
-    .mock-bar-track {
-      flex: 1;
-      height: 6px;
-      background: rgba(255,255,255,0.05);
-      border-radius: 4px;
-      overflow: hidden;
-    }
-    .mock-bar-fill { height: 100%; border-radius: 4px; }
-    .mock-bar-val { font-size: 11px; color: var(--text-muted); width: 36px; text-align: right; flex-shrink: 0; }
-    .mock-ring-row {
-      display: flex;
-      gap: 12px;
-      justify-content: center;
-      margin: 8px 0 16px;
-    }
-    .mock-ring {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-    }
-    .mock-ring svg { opacity: 0.9; }
-    .mock-ring-lbl { font-size: 10px; color: var(--text-muted); letter-spacing: 0.5px; }
-    .mock-exercise-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 0;
-      border-bottom: 1px solid var(--border2);
-    }
-    .mock-exercise-row:last-child { border-bottom: none; }
-    .mock-ex-name { font-size: 14px; color: var(--text); }
-    .mock-ex-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
-    .mock-ex-badge {
-      font-size: 10px;
-      padding: 4px 10px;
-      border-radius: 100px;
-      background: rgba(154,130,86,0.1);
-      color: var(--accent-b);
-      border: 1px solid rgba(154,130,86,0.2);
-    }
-    .mock-habit-row {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 0;
-      border-bottom: 1px solid var(--border2);
-    }
-    .mock-habit-row:last-child { border-bottom: none; }
-    .mock-habit-check {
-      width: 22px; height: 22px;
-      border-radius: 8px;
-      border: 1.5px solid rgba(154,130,86,0.4);
-      flex-shrink: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-    }
-    .mock-habit-check.done {
-      background: rgba(154,130,86,0.15);
-      border-color: var(--accent);
-      color: var(--accent-b);
-    }
-    .mock-habit-name { font-size: 14px; color: var(--text); }
-    .mock-habit-streak { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
-    .mock-chat-msg {
-      padding: 12px 16px;
-      border-radius: 16px;
-      font-size: 13px;
-      line-height: 1.5;
-      margin-bottom: 10px;
-      max-width: 85%;
-    }
-    .mock-chat-ai {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      color: var(--text-dim);
-      border-radius: 16px 16px 16px 4px;
-    }
-    .mock-chat-user {
-      background: rgba(154,130,86,0.12);
-      border: 1px solid rgba(154,130,86,0.2);
-      color: var(--text);
-      margin-left: auto;
-      border-radius: 16px 16px 4px 16px;
-    }
-    .mock-xp-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 8px;
-    }
-    .mock-xp-label { font-size: 12px; color: var(--accent-b); font-weight: 600; }
-    .mock-xp-track {
-      flex: 1;
-      height: 5px;
-      background: rgba(255,255,255,0.05);
-      border-radius: 3px;
-      overflow: hidden;
-    }
-    .mock-xp-fill {
-      height: 100%;
-      border-radius: 3px;
-      background: linear-gradient(90deg, var(--accent), var(--accent-c));
-    }
-    .mock-quest {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 0;
-      border-bottom: 1px solid var(--border2);
-    }
-    .mock-quest:last-child { border-bottom: none; }
-    .mock-quest-ico {
-      width: 34px; height: 34px;
-      background: rgba(255,255,255,0.04);
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-      flex-shrink: 0;
-    }
-    .mock-quest-lbl { font-size: 13px; color: var(--text); }
-    .mock-quest-xp { font-size: 11px; color: var(--accent); margin-top: 2px; }
+    /* Final CTA */
+    .cta-final { text-align: center; padding: 88px 0 96px; }
+    .cta-final h2 { font-size: clamp(30px, 5vw, 46px); font-weight: 800; letter-spacing: -0.02em; margin-bottom: 14px; }
+    .cta-final h2 em { font-style: normal; color: var(--gold-b); }
+    .cta-final p { color: var(--text-dim); margin-bottom: 28px; }
 
-    /* ── STATS BAR ───────────────────────────────────────────────────────── */
-    .stats-bar {
-      background: var(--surface);
-      border-top: 1px solid var(--border);
-      border-bottom: 1px solid var(--border);
-      padding: 60px 24px;
-    }
-    .stats-inner {
-      display: flex;
-      justify-content: center;
-      gap: 0;
-      max-width: 800px;
-      margin: 0 auto;
-      flex-wrap: wrap;
-    }
-    .stat-item {
-      flex: 1;
-      min-width: 160px;
-      text-align: center;
-      padding: 24px 32px;
-      border-right: 1px solid var(--border);
-    }
-    .stat-item:last-child { border-right: none; }
-    .stat-num {
-      font-family: var(--serif);
-      font-size: 48px;
-      color: var(--accent-b);
-      line-height: 1;
-      margin-bottom: 8px;
-    }
-    .stat-label {
-      font-size: 11px;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--text-muted);
-    }
+    /* Footer */
+    footer { border-top: 1px solid var(--border2); padding: 28px 0 44px; }
+    .foot { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; justify-content: space-between; }
+    .foot-links { display: flex; flex-wrap: wrap; gap: 18px; }
+    .footer-link { color: var(--text-muted); text-decoration: none; font-size: 12.5px; }
+    .footer-link:hover { color: var(--gold-b); }
+    .foot-brand { font-size: 12px; color: var(--text-muted); }
 
-    /* ── TESTIMONIALS ────────────────────────────────────────────────────── */
-    .testimonials {
-      padding: 100px 24px;
-      max-width: 1100px;
-      margin: 0 auto;
-    }
-    .testimonials-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-      gap: 16px;
-    }
-    .testimonial-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 24px;
-      padding: 28px;
-    }
-    .testimonial-stars { font-size: 13px; color: var(--accent-b); margin-bottom: 14px; }
-    .testimonial-text {
-      font-family: var(--serif);
-      font-size: 16px;
-      font-style: italic;
-      color: var(--text);
-      line-height: 1.65;
-      margin-bottom: 20px;
-    }
-    .testimonial-author { font-size: 12px; color: var(--text-muted); letter-spacing: 0.5px; }
-    .testimonial-author strong { color: var(--text-dim); display: block; font-style: normal; font-size: 13px; margin-bottom: 2px; }
-
-    /* ── CTA ─────────────────────────────────────────────────────────────── */
-    .cta-section {
-      padding: 100px 24px 120px;
-      text-align: center;
-      position: relative;
-      overflow: hidden;
-    }
-    .cta-section::before {
-      content: '';
-      position: absolute;
-      bottom: 0; left: 50%;
-      transform: translateX(-50%);
-      width: 700px; height: 400px;
-      background: radial-gradient(ellipse, rgba(154,130,86,0.08) 0%, transparent 70%);
-      pointer-events: none;
-    }
-    .cta-section .section-title { margin-bottom: 16px; }
-    .cta-section .section-sub { margin-bottom: 44px; }
-
-    /* ── FOOTER ──────────────────────────────────────────────────────────── */
-    footer {
-      border-top: 1px solid var(--border);
-      padding: 40px 40px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: gap;
-    }
-    .footer-logo {
-      font-family: var(--display);
-      font-size: 17px;
-      color: var(--accent-b);
-      letter-spacing: 0.12em;
-    }
-    .footer-note {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-    .footer-link {
-      font-size: 12px;
-      color: var(--text-muted);
-      text-decoration: none;
-      transition: color 0.15s;
-    }
-    .footer-link:hover { color: var(--accent-b); }
-
-    /* ── MOBILE ──────────────────────────────────────────────────────────── */
-    @media (max-width: 700px) {
-      nav { padding: 16px 20px; }
-      .nav-logo { font-size: 18px; }
-      .big-row { grid-template-columns: 1fr; gap: 32px; }
-      .big-row.reverse .big-visual { order: 0; }
-      .stat-item { border-right: none; border-bottom: 1px solid var(--border); }
-      .stat-item:last-child { border-bottom: none; }
-      footer { flex-direction: column; gap: 12px; text-align: center; padding: 32px 20px; }
-    }
+    .reveal { opacity: 0; transform: translateY(14px); transition: opacity .6s ease, transform .6s ease; }
+    .reveal.in { opacity: 1; transform: none; }
+    @keyframes slideUp{from{transform:translateY(100px);opacity:0}to{transform:translateY(0);opacity:1}}
   </style>
 </head>
 <body>
 
-<!-- ── NAV ───────────────────────────────────────────────────────────────── -->
-<nav>
-  <div class="nav-logo"><img src="icon-192.png" alt="Arete" style="width:28px;height:28px;border-radius:6px;vertical-align:-6px;margin-right:8px">Arete</div>
-  <a class="nav-cta" href="/" onclick="localStorage.setItem('hvi_from_landing','1')">Open App</a>
-</nav>
-
-<!-- ── HERO ──────────────────────────────────────────────────────────────── -->
-<section class="hero">
-  <span class="hero-star"><img src="icon-192.png" alt="Arete" style="width:44px;height:44px;border-radius:10px"></span>
-  <p class="hero-eyebrow">Your daily operating system</p>
-  <h1 class="hero-title">Become your<br><em>greatest self.</em></h1>
-  <p class="hero-subtitle">Habits. Workouts. Nutrition. Growth.</p>
-  <p class="hero-desc">
-    Arete brings every pillar of self-improvement into one focused, distraction-free app. No fluff, no subscriptions — just a system that works.
-  </p>
-  <div class="hero-actions">
-    <a class="btn-primary" href="/" onclick="localStorage.setItem('hvi_from_landing','1')">Start for free →</a>
-    <a class="btn-secondary" href="#features">
-      See what's inside
-      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-    </a>
+<!-- ── Nav ── -->
+<div class="nav">
+  <div class="nav-inner">
+    <a class="wordmark" href="/landing.html">ARETE</a>
+    <a class="nav-cta" href="/" onclick="localStorage.setItem('hvi_from_landing','1')">Open App</a>
   </div>
-  <p class="hero-note">Free · No account required · Works offline</p>
-  <a href="https://www.producthunt.com/posts/arete-6" target="_blank" id="ph-badge" style="margin-top:28px;display:inline-flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:100px;padding:10px 22px 10px 16px;text-decoration:none;transition:border-color 0.2s,transform 0.15s" onmouseover="this.style.borderColor='rgba(154,130,86,0.4)';this.style.transform='translateY(-1px)'" onmouseout="this.style.borderColor='';this.style.transform=''">
-    <svg width="20" height="20" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg"><path d="M20 0C8.954 0 0 8.954 0 20s8.954 20 20 20 20-8.954 20-20S31.046 0 20 0z" fill="#FF6154"/><path d="M22.667 20H17v-8h5.667a4 4 0 010 8z" fill="#fff"/><path d="M17 12h5.667a4 4 0 010 8H17V28" fill="none" stroke="#fff" stroke-width="2"/></svg>
-    <span style="font-size:13px;color:var(--text-dim);letter-spacing:0.3px"><span style="color:var(--text)">Launching on Product Hunt</span> · May 22</span>
-  </a>
-</section>
-
-<!-- ── PILLAR STRIP ───────────────────────────────────────────────────────── -->
-<div class="pillars-strip">
-  <div class="pillar-chip"><span>🧠</span> Mindset</div>
-  <div class="pillar-chip"><span>💪</span> Body</div>
-  <div class="pillar-chip"><span>🎯</span> Mastery</div>
-  <div class="pillar-chip"><span>🤝</span> Social</div>
-  <div class="pillar-chip"><span>💰</span> Wealth</div>
 </div>
 
-<!-- ── FEATURES GRID ─────────────────────────────────────────────────────── -->
-<section class="section" id="features">
-  <p class="section-eyebrow">Everything in one place</p>
-  <h2 class="section-title">Every tool you need.<br><em>Nothing you don't.</em></h2>
-  <p class="section-sub">Arete is built around the five pillars of a high-performance life — and tracks every one of them daily.</p>
+<!-- ── Hero ── -->
+<section class="hero wrap">
+  <span class="eyebrow">Free to start · No signup · Works offline</span>
+  <h1>Become your <em>greatest self.</em></h1>
+  <p class="hero-sub">Habits, training, nutrition, sleep and an AI coach — one connected system that reacts to how you actually live. Not five apps that ignore each other.</p>
+  <div class="cta-row">
+    <a class="btn-primary" href="/" onclick="localStorage.setItem('hvi_from_landing','1')">Start now — it's free</a>
+    <span class="cta-note">No account. You're in in 5 seconds.</span>
+  </div>
+  <div class="hero-figure">
+    <div class="hero-portrait"><img src="avatar-6.png" alt="Arete character at the final stage" loading="eager"></div>
+    <div class="hero-caption">Your character grows as you do · <b>Stage 6 — Arete</b></div>
+  </div>
+</section>
 
-  <div class="features-grid">
-    <div class="feature-card">
-      <span class="feature-icon">✅</span>
-      <div class="feature-title">Habit Tracking</div>
-      <p class="feature-desc">Build unshakeable routines across every pillar of your life. Streaks, completions, and pillar progress — visualised daily.</p>
-      <span class="feature-tag">Mindset · Discipline</span>
+<!-- ── Progression ── -->
+<section class="wrap">
+  <div class="sec-head reveal">
+    <span class="eyebrow">Level up. Literally.</span>
+    <h2>Your discipline has a face.</h2>
+    <p>Every habit, workout and meal earns XP. Your character evolves through six stages — from Neophyte to Arete.</p>
+  </div>
+  <div class="stages reveal">
+    <div class="stage"><div class="stage-img"><img src="avatar-1.png" alt="Neophyte" loading="lazy"></div><div class="stage-name">Neophyte</div><div class="stage-lv">Lv 1</div></div>
+    <div class="stage"><div class="stage-img"><img src="avatar-2.png" alt="Ephebos" loading="lazy"></div><div class="stage-name">Ephebos</div><div class="stage-lv">Lv 3</div></div>
+    <div class="stage"><div class="stage-img"><img src="avatar-3.png" alt="Hoplite" loading="lazy"></div><div class="stage-name">Hoplite</div><div class="stage-lv">Lv 5</div></div>
+    <div class="stage"><div class="stage-img"><img src="avatar-4.png" alt="Strategos" loading="lazy"></div><div class="stage-name">Strategos</div><div class="stage-lv">Lv 8</div></div>
+    <div class="stage"><div class="stage-img"><img src="avatar-5.png" alt="Philosophos" loading="lazy"></div><div class="stage-name">Philosophos</div><div class="stage-lv">Lv 12</div></div>
+    <div class="stage"><div class="stage-img"><img src="avatar-6.png" alt="Arete" loading="lazy"></div><div class="stage-name">Arete</div><div class="stage-lv">Lv 20+</div></div>
+  </div>
+</section>
+
+<!-- ── Connected system ── -->
+<section class="wrap" id="system">
+  <div class="sec-head reveal">
+    <span class="eyebrow">The difference</span>
+    <h2>One connected system.</h2>
+    <p>Your habit app doesn't know you trained legs. Your calorie app doesn't know you slept 5 hours. Arete's modules talk to each other.</p>
+  </div>
+  <div class="trio reveal">
+    <div class="card">
+      <div class="trio-num">01</div>
+      <h3>Training drives nutrition</h3>
+      <p>Log a heavy session and today's carbs and protein rise automatically. Rest day? Carbs come down. Your targets follow your training — not a static number.</p>
     </div>
-    <div class="feature-card">
-      <span class="feature-icon">🏋️</span>
-      <div class="feature-title">Workout Logging</div>
-      <p class="feature-desc">Follow structured programs or build your own. Log sets, track personal records, and let the app advance your days automatically.</p>
-      <span class="feature-tag">PPL · Upper/Lower · Full Body</span>
+    <div class="card">
+      <div class="trio-num">02</div>
+      <h3>A daily readiness score</h3>
+      <p>Every morning: one number built from your sleep, training load, habits and nutrition. Green means push. Red means recover. No $300 wearable required.</p>
     </div>
-    <div class="feature-card">
-      <span class="feature-icon">🥗</span>
-      <div class="feature-title">Nutrition Tracking</div>
-      <p class="feature-desc">Log meals, scan food, or describe what you ate in plain English — the AI handles the rest. Calories, protein, carbs, fat — all tracked.</p>
-      <span class="feature-tag">AI-powered · USDA database</span>
-    </div>
-    <div class="feature-card">
-      <span class="feature-icon"><svg viewBox="0 0 100 80" width="22" height="18" xmlns="http://www.w3.org/2000/svg"><path d="M50 2 L92 72 C88 72 82 72 78 72 L72 60 L28 60 L22 72 C18 72 12 72 8 72 Z" fill="none" stroke="#c4a96c" stroke-width="4"/><path d="M50 22 L68 56 L32 56 Z" fill="none" stroke="#c4a96c" stroke-width="3"/><line x1="20" y1="72" x2="2" y2="72" stroke="#c4a96c" stroke-width="3" stroke-linecap="round"/><line x1="80" y1="72" x2="98" y2="72" stroke="#c4a96c" stroke-width="3" stroke-linecap="round"/></svg></span>
-      <div class="feature-title">AI Coach</div>
-      <p class="feature-desc">Ask your coach anything — training advice, nutrition questions, how to break a bad habit. Personalized to your data and goals.</p>
-      <span class="feature-tag">Always available</span>
-    </div>
-    <div class="feature-card">
-      <span class="feature-icon">⚔️</span>
-      <div class="feature-title">XP & Levelling</div>
-      <p class="feature-desc">Earn XP for every habit logged, workout completed, and quest finished. Watch your character evolve as you grow in real life.</p>
-      <span class="feature-tag">Quests · Challenges · Ranks</span>
-    </div>
-    <div class="feature-card">
-      <span class="feature-icon">📚</span>
-      <div class="feature-title">Book Library & Journal</div>
-      <p class="feature-desc">Curated reading recommendations across every pillar, plus a daily journal to capture reflections and intentions.</p>
-      <span class="feature-tag">Mind · Body · Mastery</span>
+    <div class="card">
+      <div class="trio-num">03</div>
+      <h3>A coach that already knows</h3>
+      <p>The AI coach reads your week — training, food, sleep, journal — and calls you out unprompted when things drift. A coach, not a chatbot.</p>
     </div>
   </div>
 </section>
 
-<!-- ── BIG FEATURE ROWS ───────────────────────────────────────────────────── -->
-<div class="big-features">
-
-  <!-- Habits -->
-  <div class="big-row">
-    <div class="big-text">
-      <p class="big-eyebrow">Daily Habits</p>
-      <h3 class="big-title">Small actions.<br><em>Compounding results.</em></h3>
-      <p class="big-desc">Every great outcome starts with what you do before 9am. Arete gives your habits structure — grouped by life pillar, tracked with streaks, and reviewed at a glance.</p>
-      <ul class="big-bullets">
-        <li>Five life pillars: Mind, Body, Mastery, Social, Wealth</li>
-        <li>Custom habits with your own names and categories</li>
-        <li>Streak tracking that actually motivates</li>
-        <li>Pillar progress rings updated in real time</li>
-      </ul>
-    </div>
-    <div class="big-visual">
-      <div class="mock-head">Today · Habits</div>
-      <div class="mock-habit-row">
-        <div class="mock-habit-check done">✓</div>
-        <div><div class="mock-habit-name">Morning meditation</div><div class="mock-habit-streak">🔥 14 day streak</div></div>
-      </div>
-      <div class="mock-habit-row">
-        <div class="mock-habit-check done">✓</div>
-        <div><div class="mock-habit-name">Cold shower</div><div class="mock-habit-streak">🔥 8 day streak</div></div>
-      </div>
-      <div class="mock-habit-row">
-        <div class="mock-habit-check done">✓</div>
-        <div><div class="mock-habit-name">Read 30 minutes</div><div class="mock-habit-streak">🔥 21 day streak</div></div>
-      </div>
-      <div class="mock-habit-row">
-        <div class="mock-habit-check"></div>
-        <div><div class="mock-habit-name">No social media before noon</div><div class="mock-habit-streak">6 day streak</div></div>
-      </div>
-      <div class="mock-habit-row">
-        <div class="mock-habit-check"></div>
-        <div><div class="mock-habit-name">Journal entry</div><div class="mock-habit-streak">3 day streak</div></div>
-      </div>
-    </div>
+<!-- ── Features ── -->
+<section class="wrap" id="features">
+  <div class="sec-head reveal">
+    <span class="eyebrow">Everything in one place</span>
+    <h2>Every tool you need. Zero clutter.</h2>
   </div>
-
-  <!-- Workout -->
-  <div class="big-row reverse">
-    <div class="big-text">
-      <p class="big-eyebrow">Workout Tracking</p>
-      <h3 class="big-title">Train harder.<br><em>Recover smarter.</em></h3>
-      <p class="big-desc">Choose from built-in programs or build your own split. The app auto-advances your workout day after each session, pre-fills your last weights, and flags when you hit a personal record.</p>
-      <ul class="big-bullets">
-        <li>PPL, Upper/Lower, and Full Body programs built in</li>
-        <li>Create fully custom programs with any exercises</li>
-        <li>Auto-advances to the next day after you finish</li>
-        <li>Personal record detection with progression tips</li>
-        <li>Full exercise library — 100+ movements</li>
-      </ul>
-    </div>
-    <div class="big-visual">
-      <div class="mock-head">Push Day · PPL Program</div>
-      <div class="mock-exercise-row">
-        <div><div class="mock-ex-name">Bench Press</div><div class="mock-ex-meta">4 sets · 8 reps · 185 lbs</div></div>
-        <span class="mock-ex-badge">PR 🏆</span>
-      </div>
-      <div class="mock-exercise-row">
-        <div><div class="mock-ex-name">Overhead Press</div><div class="mock-ex-meta">3 sets · 8 reps · 115 lbs</div></div>
-        <span class="mock-ex-badge">Done ✓</span>
-      </div>
-      <div class="mock-exercise-row">
-        <div><div class="mock-ex-name">Incline DB Press</div><div class="mock-ex-meta">3 sets · 10 reps · 70 lbs</div></div>
-        <span class="mock-ex-badge" style="opacity:0.4">–</span>
-      </div>
-      <div class="mock-exercise-row">
-        <div><div class="mock-ex-name">Lateral Raises</div><div class="mock-ex-meta">3 sets · 15 reps · 25 lbs</div></div>
-        <span class="mock-ex-badge" style="opacity:0.4">–</span>
-      </div>
-    </div>
+  <div class="grid reveal">
+    <div class="card feat"><div class="ic">◆</div><h3>Habit tracking</h3><p>Streaks, schedules, routines and a daily quest system that makes consistency feel like a game.</p></div>
+    <div class="card feat"><div class="ic">◆</div><h3>Workout logging</h3><p>Programs, sets, PRs, progression hints and a rest timer that follows you down the page.</p></div>
+    <div class="card feat"><div class="ic">◆</div><h3>Nutrition & AI food scan</h3><p>Log meals in seconds — type them, or photograph your plate and let the AI count it.</p></div>
+    <div class="card feat"><div class="ic">◆</div><h3>Journal & your Why</h3><p>Daily reflection prompts, and your reason for grinding front and center every morning.</p></div>
+    <div class="card feat"><div class="ic">◆</div><h3>Leaderboards</h3><p>Create a group with your friends and compete on streaks and XP.</p></div>
+    <div class="card feat"><div class="ic">◆</div><h3>Private & offline</h3><p>Local-first. Works with no connection. Your data is yours — sync is optional.</p></div>
   </div>
-
-  <!-- Nutrition -->
-  <div class="big-row">
-    <div class="big-text">
-      <p class="big-eyebrow">Nutrition</p>
-      <h3 class="big-title">Fuel your body<br><em>with intention.</em></h3>
-      <p class="big-desc">Describe a meal in plain English and the AI calculates your macros instantly. Or search from a database of hundreds of foods. Stay on target with daily calorie and macro goals you set yourself.</p>
-      <ul class="big-bullets">
-        <li>AI macro calculator — describe anything, get numbers</li>
-        <li>USDA food database with barcode-style search</li>
-        <li>Daily calorie, protein, carb, and fat targets</li>
-        <li>TDEE calculator to set your goals intelligently</li>
-        <li>Weight tracking with trend graph</li>
-      </ul>
-    </div>
-    <div class="big-visual">
-      <div class="mock-head">Today · Nutrition</div>
-      <div class="mock-ring-row">
-        <div class="mock-ring">
-          <svg viewBox="0 0 60 60" width="60" height="60">
-            <circle cx="30" cy="30" r="24" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="5"/>
-            <circle cx="30" cy="30" r="24" fill="none" stroke="#e8a030" stroke-width="5" stroke-dasharray="108 43" stroke-linecap="round" transform="rotate(-90 30 30)"/>
-            <text x="30" y="35" text-anchor="middle" fill="#f0ece4" font-size="11" font-family="Inter">71%</text>
-          </svg>
-          <span class="mock-ring-lbl">Calories</span>
-        </div>
-        <div class="mock-ring">
-          <svg viewBox="0 0 60 60" width="60" height="60">
-            <circle cx="30" cy="30" r="24" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="5"/>
-            <circle cx="30" cy="30" r="24" fill="none" stroke="#4ade80" stroke-width="5" stroke-dasharray="120 31" stroke-linecap="round" transform="rotate(-90 30 30)"/>
-            <text x="30" y="35" text-anchor="middle" fill="#f0ece4" font-size="11" font-family="Inter">80%</text>
-          </svg>
-          <span class="mock-ring-lbl">Protein</span>
-        </div>
-        <div class="mock-ring">
-          <svg viewBox="0 0 60 60" width="60" height="60">
-            <circle cx="30" cy="30" r="24" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="5"/>
-            <circle cx="30" cy="30" r="24" fill="none" stroke="#60a5fa" stroke-width="5" stroke-dasharray="90 61" stroke-linecap="round" transform="rotate(-90 30 30)"/>
-            <text x="30" y="35" text-anchor="middle" fill="#f0ece4" font-size="11" font-family="Inter">60%</text>
-          </svg>
-          <span class="mock-ring-lbl">Carbs</span>
-        </div>
-        <div class="mock-ring">
-          <svg viewBox="0 0 60 60" width="60" height="60">
-            <circle cx="30" cy="30" r="24" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="5"/>
-            <circle cx="30" cy="30" r="24" fill="none" stroke="#f87171" stroke-width="5" stroke-dasharray="70 81" stroke-linecap="round" transform="rotate(-90 30 30)"/>
-            <text x="30" y="35" text-anchor="middle" fill="#f0ece4" font-size="11" font-family="Inter">47%</text>
-          </svg>
-          <span class="mock-ring-lbl">Fat</span>
-        </div>
-      </div>
-      <div class="mock-bar-row">
-        <span class="mock-bar-label">Breakfast</span>
-        <div class="mock-bar-track"><div class="mock-bar-fill" style="width:35%;background:#9a8256"></div></div>
-        <span class="mock-bar-val">620</span>
-      </div>
-      <div class="mock-bar-row">
-        <span class="mock-bar-label">Lunch</span>
-        <div class="mock-bar-track"><div class="mock-bar-fill" style="width:50%;background:#9a8256"></div></div>
-        <span class="mock-bar-val">880</span>
-      </div>
-      <div class="mock-bar-row">
-        <span class="mock-bar-label">Dinner</span>
-        <div class="mock-bar-track"><div class="mock-bar-fill" style="width:27%;background:rgba(154,130,86,0.4)"></div></div>
-        <span class="mock-bar-val">270</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- AI Coach -->
-  <div class="big-row reverse">
-    <div class="big-text">
-      <p class="big-eyebrow">AI Coach</p>
-      <h3 class="big-title">A coach that<br><em>knows your data.</em></h3>
-      <p class="big-desc">Ask about your training, your diet, your habits, or your goals. The AI coach has context on your progress and can give advice that actually applies to you.</p>
-      <ul class="big-bullets">
-        <li>Powered by cutting-edge AI language models</li>
-        <li>Aware of your current program, macros, and habits</li>
-        <li>Available any time — no appointments needed</li>
-        <li>Ask anything from form tips to meal ideas</li>
-      </ul>
-    </div>
-    <div class="big-visual">
-      <div class="mock-head"><svg viewBox="0 0 100 80" width="14" height="11" style="vertical-align:-1px" xmlns="http://www.w3.org/2000/svg"><path d="M50 2 L92 72 C88 72 82 72 78 72 L72 60 L28 60 L22 72 C18 72 12 72 8 72 Z" fill="none" stroke="#c4a96c" stroke-width="4"/><path d="M50 22 L68 56 L32 56 Z" fill="none" stroke="#c4a96c" stroke-width="3"/><line x1="20" y1="72" x2="2" y2="72" stroke="#c4a96c" stroke-width="3" stroke-linecap="round"/><line x1="80" y1="72" x2="98" y2="72" stroke="#c4a96c" stroke-width="3" stroke-linecap="round"/></svg> Arete Coach</div>
-      <div class="mock-chat-msg mock-chat-user">I've been stuck on bench press for 3 weeks at 185 lbs. What should I do?</div>
-      <div class="mock-chat-msg mock-chat-ai">Plateaus at your stage usually come down to one of three things: volume, frequency, or recovery. Since you're on PPL you're benching 2–3x a week which is solid — I'd try adding a pause rep variation or a top set with 2–3 back-off sets to break the adaptation...</div>
-      <div class="mock-chat-msg mock-chat-user" style="margin-top:6px">What should I eat before my push day?</div>
-      <div class="mock-chat-msg mock-chat-ai">With a 2,500 cal goal, aim for 500–700 cal about 90 minutes out. A good combo: oats + banana + protein shake — fast carbs for energy, protein to limit muscle breakdown...</div>
-    </div>
-  </div>
-
-  <!-- Gamification -->
-  <div class="big-row">
-    <div class="big-text">
-      <p class="big-eyebrow">XP & Growth</p>
-      <h3 class="big-title">Level up in the<br><em>game of life.</em></h3>
-      <p class="big-desc">Every habit you log, every workout you finish, every quest you complete — earns XP. Watch your character evolve from a beginner into a champion, mirroring your real-life growth.</p>
-      <ul class="big-bullets">
-        <li>Earn XP for habits, workouts, meals, and quests</li>
-        <li>20+ levels with unique titles and character stages</li>
-        <li>Daily quests and weekly challenges to push you further</li>
-        <li>Animated anime-style avatar that evolves with your rank</li>
-      </ul>
-    </div>
-    <div class="big-visual">
-      <div class="mock-head">Level 7 · The Focused</div>
-      <div class="mock-xp-row">
-        <span class="mock-xp-label">Lv.7</span>
-        <div class="mock-xp-track"><div class="mock-xp-fill" style="width:62%"></div></div>
-        <span style="font-size:11px;color:var(--text-muted)">620/900 XP</span>
-      </div>
-      <div style="margin: 16px 0 12px; font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-muted)">Daily Quests</div>
-      <div class="mock-quest">
-        <div class="mock-quest-ico">💧</div>
-        <div><div class="mock-quest-lbl">Log 3 habits today</div><div class="mock-quest-xp">+30 XP · Done ✓</div></div>
-      </div>
-      <div class="mock-quest">
-        <div class="mock-quest-ico">🏋️</div>
-        <div><div class="mock-quest-lbl">Finish a workout session</div><div class="mock-quest-xp">+45 XP · Done ✓</div></div>
-      </div>
-      <div class="mock-quest">
-        <div class="mock-quest-ico">📖</div>
-        <div><div class="mock-quest-lbl">Hit your protein goal</div><div class="mock-quest-xp">+25 XP</div></div>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-<!-- ── STATS BAR ──────────────────────────────────────────────────────────── -->
-<div class="stats-bar">
-  <div class="stats-inner">
-    <div class="stat-item">
-      <div class="stat-num">6</div>
-      <div class="stat-label">Core modules</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-num">100+</div>
-      <div class="stat-label">Exercises</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-num">20+</div>
-      <div class="stat-label">Levels to earn</div>
-    </div>
-    <div class="stat-item">
-      <div class="stat-num">0</div>
-      <div class="stat-label">Subscriptions</div>
-    </div>
-  </div>
-</div>
-
-<!-- ── WHY ARETE ──────────────────────────────────────────────────────────── -->
-<section class="testimonials">
-  <p class="section-eyebrow">The story</p>
-  <h2 class="section-title">Built by someone<br><em>who uses it every day.</em></h2>
-  <p class="section-sub" style="margin-bottom:48px">I got tired of juggling five different apps for habits, workouts, and food. So I built the one I actually wanted to use. Arete is a solo project — every feature exists because I needed it.</p>
-
-  <div class="testimonials-grid">
-    <div class="testimonial-card">
-      <div class="testimonial-stars" style="color:var(--accent)">✦</div>
-      <p class="testimonial-text" style="font-style:normal;font-family:var(--sans);font-size:14px;color:var(--text-dim);line-height:1.7">No venture capital. No growth hacks. No dark patterns. Just a tool built with care by someone who believes self-improvement shouldn't cost $14.99/month.</p>
-      <div class="testimonial-author"><strong>Solo-built</strong> One developer, real passion</div>
-    </div>
-    <div class="testimonial-card">
-      <div class="testimonial-stars" style="color:var(--accent)">✦</div>
-      <p class="testimonial-text" style="font-style:normal;font-family:var(--sans);font-size:14px;color:var(--text-dim);line-height:1.7">Your data lives on your device. No account required, no tracking beyond basic analytics. You own your progress — export it, delete it, whatever you want.</p>
-      <div class="testimonial-author"><strong>Privacy-first</strong> Your data stays yours</div>
-    </div>
-    <div class="testimonial-card">
-      <div class="testimonial-stars" style="color:var(--accent)">✦</div>
-      <p class="testimonial-text" style="font-style:normal;font-family:var(--sans);font-size:14px;color:var(--text-dim);line-height:1.7">This is early. Things might break. But I'm actively building and shipping improvements every week — and I genuinely want to hear what you think.</p>
-      <div class="testimonial-author"><strong>Early access</strong> Shape what this becomes</div>
-    </div>
-  </div>
-
-  <!-- Community / Feedback CTA -->
-  <div style="text-align:center;margin-top:48px">
-    <p style="font-size:14px;color:var(--text-dim);margin-bottom:16px">Want to share feedback, request features, or just say hi?</p>
-    <a href="https://discord.gg/J7RqdBtR5" class="btn-primary" style="font-size:12px;padding:14px 28px" id="community-btn">Join the Community →</a>
-    <p style="font-size:11px;color:var(--text-muted);margin-top:12px" id="discord-count">Early users get a direct line to the developer</p>
-  </div>
-  <script>
-    // Show live Discord member count
-    fetch('https://discord.com/api/v9/invites/J7RqdBtR5?with_counts=true')
-      .then(r=>r.json()).then(d=>{
-        if(d.approximate_member_count){
-          const el=document.getElementById('discord-count');
-          if(el) el.textContent=d.approximate_member_count+' member'+(d.approximate_member_count!==1?'s':'')+' · Early users get a direct line to the developer';
-        }
-      }).catch(()=>{});
-  </script>
 </section>
 
-<!-- ── CTA ────────────────────────────────────────────────────────────────── -->
-<section class="cta-section">
-  <p class="section-eyebrow">Begin today</p>
-  <h2 class="section-title">Become your<br><em>greatest self.</em></h2>
-  <p class="section-sub">Free. No account. No subscriptions. Just open it and start — your data stays on your device.</p>
+<!-- ── Pricing ── -->
+<section class="wrap" id="pricing">
+  <div class="sec-head reveal">
+    <span class="eyebrow">Honest pricing</span>
+    <h2>Start free. Upgrade if you outgrow it.</h2>
+  </div>
+  <div class="plans reveal">
+    <div class="card plan">
+      <div class="plan-name">Free</div>
+      <div class="plan-price">$0</div>
+      <div class="plan-sub">No signup, no credit card</div>
+      <ul>
+        <li>Core habit tracking & streaks</li>
+        <li>Character, XP & leaderboards</li>
+        <li>Daily readiness score</li>
+        <li>Works offline</li>
+      </ul>
+    </div>
+    <div class="card plan plan--premium">
+      <div class="plan-badge">7-DAY FREE TRIAL</div>
+      <div class="plan-name">Premium</div>
+      <div class="plan-price">$7.99<small>/mo</small></div>
+      <div class="plan-sub">or $59/yr — cancel anytime</div>
+      <ul>
+        <li>Unlimited habits & routines</li>
+        <li>Full workout logging & PRs</li>
+        <li>Nutrition tracking + AI food scan</li>
+        <li>Unlimited AI coaching</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ── Story ── -->
+<section class="wrap" id="story">
+  <div class="sec-head reveal">
+    <span class="eyebrow">The story</span>
+    <h2>Built by someone who actually uses it.</h2>
+  </div>
+  <div class="story reveal">
+    <p class="story-quote">"I got tired of juggling five different apps for habits, workouts and food. So I built the one I actually wanted to use."</p>
+    <p><strong>Arete is a solo project</strong> — built by a D1 college athlete between training sessions and classes. No venture capital, no growth hacks, no dark patterns.</p>
+    <p><strong>Your data lives on your device.</strong> No account required, no tracking beyond basic analytics. You own your progress — export it, delete it, whatever you want.</p>
+    <p><strong>This is early.</strong> Things might break. But improvements ship every week, and early users get a direct line to the developer.</p>
+    <div class="card discord-card">
+      <div class="grow">
+        <h4>Join the Discord</h4>
+        <p id="discord-count">Early users get a direct line to the developer</p>
+      </div>
+      <a class="btn-ghost" href="https://discord.gg/J7RqdBtR5" target="_blank" rel="noopener">Join →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Final CTA ── -->
+<section class="cta-final wrap">
+  <span class="eyebrow">Begin today</span>
+  <h2>Become your <em>greatest self.</em></h2>
+  <p>Free to start. No signup. You could be tracking your first habit in 10 seconds.</p>
   <a class="btn-primary" href="/" onclick="localStorage.setItem('hvi_from_landing','1')">Launch Arete →</a>
-  <p class="hero-note" style="margin-top:24px">Works on iPhone, Android, and desktop &nbsp;·&nbsp; Installable as an app</p>
 </section>
 
-<!-- ── FOOTER ─────────────────────────────────────────────────────────────── -->
+<!-- ── Footer ── -->
 <footer>
-  <div class="footer-logo"><img src="icon-192.png" alt="Arete" style="width:28px;height:28px;border-radius:6px;vertical-align:-6px;margin-right:8px">Arete</div>
-  <span class="footer-note">Your daily operating system.</span>
-  <div style="display:flex;gap:16px;flex-wrap:wrap">
-    <a class="footer-link" href="/free-habit-tracker">Habit Tracker</a>
-    <a class="footer-link" href="/workout-nutrition-tracker">Workout & Nutrition</a>
-    <a class="footer-link" href="/self-improvement-app">Self-Improvement</a>
-    <a class="footer-link" href="/" onclick="localStorage.setItem('hvi_from_landing','1')">Open App →</a>
+  <div class="wrap foot">
+    <span class="foot-brand">ARETE · Become your greatest self</span>
+    <div class="foot-links">
+      <a class="footer-link" href="/free-habit-tracker">Free Habit Tracker</a>
+      <a class="footer-link" href="/workout-nutrition-tracker">Workout & Nutrition Tracker</a>
+      <a class="footer-link" href="/self-improvement-app">Self-Improvement App</a>
+      <a class="footer-link" href="/" onclick="localStorage.setItem('hvi_from_landing','1')">Open App →</a>
+    </div>
   </div>
 </footer>
 
 <script>
-// PWA Install prompt for mobile visitors
+// Live Discord member count
+fetch('https://discord.com/api/v9/invites/J7RqdBtR5?with_counts=true')
+  .then(r=>r.json()).then(d=>{
+    if(d.approximate_member_count){
+      const el=document.getElementById('discord-count');
+      if(el) el.textContent=d.approximate_member_count+' member'+(d.approximate_member_count!==1?'s':'')+' · Early users get a direct line to the developer';
+    }
+  }).catch(()=>{});
+
+// Scroll reveal
+const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: 0.12 });
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+// PWA install prompt for mobile visitors
 let _landingInstallPrompt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   _landingInstallPrompt = e;
-  // Show install banner after 5 seconds on mobile
   if (window.innerWidth <= 768) {
     setTimeout(() => {
       if (!_landingInstallPrompt) return;
       const b = document.createElement('div');
       b.id = 'install-bar';
-      b.innerHTML = `<div style="position:fixed;bottom:0;left:0;right:0;z-index:9000;padding:12px;background:rgba(10,9,8,.95);backdrop-filter:blur(16px);border-top:1px solid rgba(196,169,108,.2);display:flex;align-items:center;gap:12px;animation:slideUp .35s ease">
+      b.innerHTML = `<div style="position:fixed;bottom:0;left:0;right:0;z-index:9000;padding:12px;background:rgba(12,12,13,.95);backdrop-filter:blur(16px);border-top:1px solid rgba(227,184,120,.2);display:flex;align-items:center;gap:12px;animation:slideUp .35s ease">
         <img src="icon-192.png" alt="" style="width:40px;height:40px;border-radius:10px;flex-shrink:0">
-        <div style="flex:1"><div style="font-size:14px;color:#e8e0d0;font-weight:600">Install Arete</div><div style="font-size:11px;color:#8a7e6b;margin-top:2px">Full app experience, works offline</div></div>
-        <button onclick="_landingInstallPrompt.prompt();_landingInstallPrompt.userChoice.then(()=>{_landingInstallPrompt=null});this.closest('#install-bar').remove()" style="padding:8px 18px;border:none;border-radius:10px;background:#c4a96c;color:#fff;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Install</button>
-        <button onclick="this.closest('#install-bar').remove()" style="background:none;border:none;color:#8a7e6b;font-size:16px;padding:4px;cursor:pointer">✕</button>
+        <div style="flex:1"><div style="font-size:14px;color:#f2f1ee;font-weight:600">Install Arete</div><div style="font-size:11px;color:rgba(242,241,238,.5);margin-top:2px">Full app experience, works offline</div></div>
+        <button onclick="_landingInstallPrompt.prompt();_landingInstallPrompt.userChoice.then(()=>{_landingInstallPrompt=null});this.closest('#install-bar').remove()" style="padding:8px 18px;border:none;border-radius:999px;background:#e3b878;color:#14100a;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">Install</button>
+        <button onclick="this.closest('#install-bar').remove()" style="background:none;border:none;color:rgba(242,241,238,.5);font-size:16px;padding:4px;cursor:pointer">✕</button>
       </div>`;
       document.body.appendChild(b);
     }, 5000);
@@ -1078,7 +409,6 @@ window.addEventListener('beforeinstallprompt', (e) => {
 });
 window.addEventListener('appinstalled', () => { _landingInstallPrompt = null; const b = document.getElementById('install-bar'); if (b) b.remove(); });
 </script>
-<style>@keyframes slideUp{from{transform:translateY(100px);opacity:0}to{transform:translateY(0);opacity:1}}</style>
 
 </body>
 </html>
