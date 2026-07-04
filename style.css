@@ -2866,6 +2866,15 @@ body {
   [data-theme="light"] .view { background-image: none; }
 }
 
+/* Home: hero + Why cards match the Today card — clean neutral surfaces,
+   gold lives only in the text accents. */
+.hm-hero-glow { display: none; }
+.hm-hero-card { background: var(--surface); }
+.why-card {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+}
+
 /* ══ BLACK & GOLD IDENTITY ══════════════════════════════════════════════
    Gold carries every screen the way the Diet section does: section labels
    in letterspaced gold caps, key values in gold, supporting labels and body
