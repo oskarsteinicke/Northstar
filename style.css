@@ -2681,6 +2681,13 @@ body {
   display: flex; align-items: center; gap: 10px; justify-content: space-between;
   margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border2);
 }
+.tb-sleep {
+  display: flex; align-items: center; gap: 10px; justify-content: space-between;
+  margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border2);
+}
+.tb-sleep-info { font-size: 12.5px; color: var(--text-dim); display: flex; align-items: center; gap: 7px; min-width: 0; }
+.tb-sleep-info .ic { opacity: 0.7; flex-shrink: 0; }
+.tb-sleep-val { color: var(--accent-b); font-weight: 700; }
 .tb-journal-prompt { font-size: 12px; color: var(--text-dim); line-height: 1.4; font-style: italic; }
 .tb-journal-btn {
   background: var(--surface2); border: 1px solid var(--border2); color: var(--accent-b);

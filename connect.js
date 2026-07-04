@@ -668,6 +668,19 @@ function todayBriefingHTML() {
         <div class="tb-cell" onclick="go('habits')"><div class="tb-cell-ico">${ic('check')}</div><div class="tb-cell-val">${doneH}/${totalH}</div><div class="tb-cell-lbl">Habits</div></div>
       </div>
       ${coachHTML}
+      ${(() => {
+        // Slim sleep row: a log prompt until last night is entered, then an
+        // at-a-glance stat. Keeps sleep one tap from home without a big card.
+        const slp = (typeof sleepLog !== 'undefined' && sleepLog) ? (sleepLog[t] || null) : null;
+        const slpLogged = !!(slp && (slp.hours || slp.quality));
+        const info = slpLogged
+          ? `<span class="tb-sleep-val">${slp.hours || '?'}h</span>${slp.quality ? ' · quality ' + slp.quality + '/5' : ''}`
+          : `Last night's sleep — not logged`;
+        return `<div class="tb-sleep">
+        <span class="tb-sleep-info">${ic('moon', 14)} <span>${info}</span></span>
+        <button class="tb-journal-btn" onclick="go('sleep')">${slpLogged ? 'Edit' : 'Log'}</button>
+      </div>`;
+      })()}
       <div class="tb-journal">
         <span class="tb-journal-prompt">${ic('book', 15)} ${esc(prompt)}</span>
         <button class="tb-journal-btn" onclick="libTab='journal';go('library')">${jDone ? 'Edit' : 'Reflect'}</button>
