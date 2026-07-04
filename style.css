@@ -2875,6 +2875,32 @@ body {
   border: 1px solid var(--border2);
 }
 
+/* ══ PREMIUM: COACH'S FOCUS CARD ════════════════════════════════════════ */
+.ci-card {
+  margin: 0 16px 12px; padding: 16px;
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: var(--radius);
+}
+.ci-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.ci-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.22em;
+  text-transform: uppercase; color: var(--accent-b);
+}
+.ci-lock {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+  color: var(--accent-b); background: rgba(227,184,120,0.12);
+  padding: 3px 10px; border-radius: 999px;
+}
+.ci-refresh {
+  background: none; border: none; color: var(--text-muted); cursor: pointer;
+  padding: 4px 6px; border-radius: 8px; line-height: 0; transition: color 0.2s;
+}
+.ci-refresh:hover { color: var(--accent-b); }
+.ci-text { font-size: 14px; color: var(--text); line-height: 1.55; }
+.ci-teaser { color: var(--text-dim); }
+.ci-locked { cursor: pointer; transition: border-color 0.2s; }
+.ci-locked:hover { border-color: rgba(227,184,120,0.35); }
+
 /* ══ BLACK & GOLD IDENTITY ══════════════════════════════════════════════
    Gold carries every screen the way the Diet section does: section labels
    in letterspaced gold caps, key values in gold, supporting labels and body

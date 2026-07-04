@@ -1520,6 +1520,7 @@ function renderHome() {
 
     ${typeof whyCardHTML === 'function' ? whyCardHTML() : ''}
     ${typeof todayBriefingHTML === 'function' ? todayBriefingHTML() : ''}
+    ${typeof coachInsightCardHTML === 'function' ? coachInsightCardHTML() : ''}
 
     <div class="hm-pillars ani">${pillarStrip}</div>
 

@@ -379,6 +379,113 @@ function getCoachNudge() {
   } catch (e) { console.warn('[Arete] nudge error:', e); return null; }
 }
 
+// ── PREMIUM: COACH'S DAILY FOCUS ─────────────────────────────────────────────
+// One AI-generated, personalized focus per day, built from this account's
+// actual data. Premium-only (it costs API calls); free users see a locked
+// teaser that opens the paywall. Cached per day in hvi_coach_insight.
+const _INSIGHT_PROXY = 'https://arete-ai.oskarsteinicke.workers.dev';
+
+function _coachInsightContext() {
+  const parts = [];
+  try {
+    const r = getReadiness();
+    parts.push(`Readiness ${r.score}/100 (${r.label}); load ${Math.round(r.factors.load * 100)}%, sleep ${Math.round(r.factors.sleep * 100)}%, habits ${Math.round(r.factors.habits * 100)}%, nutrition ${Math.round(r.factors.nutrition * 100)}%${r.factors.whoop != null ? ', Whoop ' + Math.round(r.factors.whoop) : ''}`);
+  } catch {}
+  try {
+    const mt = getTodaysMacroTargets();
+    const m = getDayMacros();
+    parts.push(`Day type: ${mt.type || 'training'}${mt.dayName ? ' (' + mt.dayName + ')' : ''}. Eaten ${m.cal}/${mt.calories || '?'} kcal, protein ${m.p}/${mt.protein || '?'}g`);
+  } catch {}
+  try {
+    const done = habits.filter(h => log[h.id]?.completedToday).length;
+    parts.push(`Habits today: ${done}/${habits.length}`);
+    const risk = habits.filter(h => (log[h.id]?.streak || 0) >= 3 && !log[h.id]?.completedToday).slice(0, 3).map(h => `${h.name} (${log[h.id].streak}d streak)`);
+    if (risk.length) parts.push('Streaks at risk: ' + risk.join(', '));
+  } catch {}
+  try {
+    const rec = getRecoveryStatus();
+    parts.push(`Training: ${rec.days} sessions last 7 days, ${rec.consecutive} consecutive`);
+  } catch {}
+  try {
+    const sl = sleepLog[today()] || sleepLog[yesterday()];
+    if (sl && sl.hours) parts.push(`Last sleep: ${sl.hours}h${sl.quality ? ', quality ' + sl.quality + '/5' : ''}`);
+  } catch {}
+  try {
+    const jk = Object.keys(journal || {}).sort().reverse()[0];
+    const j = jk ? journal[jk] : null;
+    if (j && j.struggle) parts.push(`Recent journal struggle: "${String(j.struggle).slice(0, 100)}"`);
+  } catch {}
+  try {
+    const why = LS.get('hvi_why', '');
+    if (why) parts.push(`Their why: "${String(why).slice(0, 80)}"`);
+  } catch {}
+  try {
+    const goals = (LS.get('hvi_goals', []) || []).filter(g => !g.done).slice(0, 3).map(g => g.text);
+    if (goals.length) parts.push('Active goals: ' + goals.join('; '));
+  } catch {}
+  return parts.join('\n');
+}
+
+async function fetchCoachInsight(force) {
+  const t = today();
+  let cached = null;
+  try { cached = JSON.parse(localStorage.getItem('hvi_coach_insight') || 'null'); } catch {}
+  if (!force && cached && cached.date === t && cached.text) return cached.text;
+  const prompt = `You are Arete Coach — a direct, warm performance coach blending Stoic philosophy and sports science. Based ONLY on this user's data from today, give ONE specific focus or tip for the rest of their day.
+
+DATA:
+${_coachInsightContext()}
+
+Rules: 2-3 sentences, maximum 55 words. Speak directly ("you"). Reference at least one of their actual numbers. Be concrete about what to do today. No greetings, no emojis, no markdown, no preamble.`;
+  const res = await fetch(_INSIGHT_PROXY, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.7, maxOutputTokens: 120 } }),
+  });
+  if (!res.ok) throw new Error('insight fetch failed: ' + res.status);
+  const data = await res.json();
+  const text = (data?.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+  if (!text) throw new Error('empty insight');
+  try { localStorage.setItem('hvi_coach_insight', JSON.stringify({ date: t, text })); } catch {}
+  return text;
+}
+
+function coachInsightCardHTML() {
+  try {
+    const premium = (typeof isPremium === 'function') ? isPremium() : false;
+    if (!premium) {
+      return `<div class="ci-card ci-locked ani" onclick="if(typeof showUpgradeModal==='function')showUpgradeModal('coach')" role="button" tabindex="0" aria-label="Coach's Focus — Premium feature">
+        <div class="ci-head"><span class="ci-label">Coach's Focus</span><span class="ci-lock">Premium</span></div>
+        <div class="ci-text ci-teaser">A daily, personal focus from your AI coach — built from your readiness, training, nutrition and habits.</div>
+      </div>`;
+    }
+    let cached = null;
+    try { cached = JSON.parse(localStorage.getItem('hvi_coach_insight') || 'null'); } catch {}
+    const fresh = cached && cached.date === today() && cached.text;
+    if (!fresh) setTimeout(() => _fillCoachInsight(false), 400);
+    return `<div class="ci-card ani">
+      <div class="ci-head"><span class="ci-label">Coach's Focus</span>
+        <button class="ci-refresh" onclick="_fillCoachInsight(true)" aria-label="Get a new insight" title="New insight">${(typeof icon === 'function') ? icon('refresh', 13) : '↻'}</button>
+      </div>
+      <div class="ci-text" id="ci-text">${fresh ? esc(cached.text) : 'Reading your day…'}</div>
+    </div>`;
+  } catch { return ''; }
+}
+
+async function _fillCoachInsight(force) {
+  const el = document.getElementById('ci-text');
+  if (!el) return;
+  if (force) el.textContent = 'Reading your day…';
+  try {
+    const text = await fetchCoachInsight(force);
+    const el2 = document.getElementById('ci-text');
+    if (el2) el2.textContent = text;
+  } catch {
+    const el2 = document.getElementById('ci-text');
+    if (el2) el2.textContent = "Couldn't reach your coach right now. Tap ↻ to retry.";
+  }
+}
+
 // ── PHASE 5: UNIFIED "TODAY" BRIEFING ────────────────────────────────────────
 // One daily command-center card at the top of home that composes every module:
 // readiness, today's training, the adjusted nutrition target, habit status, a
