@@ -3,22 +3,22 @@ html { transition: background-color 0.2s ease, color 0.2s ease; }
 body, #app, .view, nav, .coach-panel { transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease; }
 
 :root {
-  /* "Quiet luxury" palette — warm cinematic black + golden-hour amber
-     (from the Arete mood board: night cities, dusk light, old-money warmth) */
-  --bg: #0b0805;
-  --surface: #1b1510;
-  --surface2: #272019;
-  --border: rgba(255,244,224,0.11);
-  --border2: rgba(255,244,224,0.07);
-  --text: #f0e7d6;
-  --text-dim: rgba(240,231,214,0.64);
-  --text-muted: rgba(240,231,214,0.40);
+  /* Monochrome-minimal palette: near-black, bold white modern type, and gold
+     reserved as the single warm accent — the one lit window in a dark tower. */
+  --bg: #0a0a0b;
+  --surface: #151517;
+  --surface2: #1f1f23;
+  --border: rgba(255,255,255,0.10);
+  --border2: rgba(255,255,255,0.06);
+  --text: #f2f1ee;
+  --text-dim: rgba(242,241,238,0.62);
+  --text-muted: rgba(242,241,238,0.38);
   --accent: #b8874a;
   --accent-b: #e3b878;
   --card-shadow: 0 6px 28px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.05);
   --nav-h: 64px;
   --serif: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
-  --display: 'Playfair Display', 'Cinzel', Georgia, serif;
+  --display: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
   --radius: 16px;
   --radius-sm: 10px;
   --cal: #e3b878;
@@ -32,9 +32,8 @@ html, body { height: 100%; overflow: hidden; }
 body {
   background-color: var(--bg);
   background-image:
-    radial-gradient(ellipse 95% 55% at 50% -2%, rgba(205,145,70,0.20) 0%, transparent 58%),
-    radial-gradient(ellipse 55% 48% at 4% 72%, rgba(184,135,74,0.08) 0%, transparent 52%),
-    radial-gradient(ellipse 50% 42% at 96% 88%, rgba(90,120,190,0.05) 0%, transparent 52%);
+    radial-gradient(ellipse 95% 55% at 50% -2%, rgba(255,255,255,0.06) 0%, transparent 58%),
+    radial-gradient(ellipse 60% 45% at 50% 108%, rgba(0,0,0,0.5) 0%, transparent 60%);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
   line-height: 1.55;
@@ -68,7 +67,7 @@ nav {
   width: 100%;
   max-width: 480px;
   height: var(--nav-h);
-  background: rgba(10,9,8,0.92);
+  background: rgba(10,10,11,0.92);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-top: 1px solid rgba(255,255,255,0.06);
@@ -2523,7 +2522,7 @@ body {
 .why-modal-sheet {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
   width: calc(100% - 40px); max-width: 420px;
-  background: linear-gradient(180deg, #221c14, var(--surface));
+  background: linear-gradient(180deg, #1c1c20, var(--surface));
   border: 1px solid var(--border); border-radius: 18px; padding: 22px;
   box-shadow: 0 20px 60px rgba(0,0,0,0.6);
 }
@@ -2560,7 +2559,7 @@ body {
 .rd-overlay.rd-visible { opacity: 1; }
 .rd-sheet {
   position: relative; width: 100%; max-width: 440px;
-  background: linear-gradient(180deg, #221c14 0%, var(--surface) 100%);
+  background: linear-gradient(180deg, #1c1c20 0%, var(--surface) 100%);
   border: 1px solid var(--border); border-bottom: none;
   border-radius: 22px 22px 0 0; padding: 26px 22px calc(26px + env(safe-area-inset-bottom));
   box-shadow: 0 -8px 40px rgba(0,0,0,0.6);
@@ -2610,7 +2609,7 @@ body {
 /* ══ CONNECTED SYSTEM: UNIFIED TODAY BRIEFING ═══════════════════════════ */
 .today-brief {
   margin: 0 16px 12px; padding: 16px;
-  background: linear-gradient(160deg, rgba(34,28,20,0.95), var(--surface));
+  background: linear-gradient(160deg, rgba(28,28,32,0.95), var(--surface));
   border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: var(--card-shadow);
 }
@@ -2698,7 +2697,7 @@ body {
 .pw-overlay.pw-visible { opacity: 1; }
 .pw-card {
   position: relative; width: 100%; max-width: 440px;
-  background: linear-gradient(180deg, #221c14 0%, var(--surface) 100%);
+  background: linear-gradient(180deg, #1c1c20 0%, var(--surface) 100%);
   border: 1px solid var(--border);
   border-bottom: none;
   border-radius: 22px 22px 0 0;
@@ -2787,3 +2786,20 @@ body {
 .pw-badge-free { color: var(--text-dim); }
 .pw-status-plan { font-size: 12px; color: var(--text-dim); }
 .pw-status-note { font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-top: 8px; }
+
+/* ══ MONOCHROME TYPE TREATMENT ══════════════════════════════════════════
+   Display font is now the modern sans stack; these were sized for a serif
+   at weight 400. Big titles go bold with tight tracking ("ON A MISSION"),
+   eyebrows keep their wide letterspacing but firm up. Placed last so it
+   wins the cascade at equal specificity. */
+.page-title, .hm-hero-name, .ah-title, .jh-title, .pd-name, .char-name,
+.why-modal-title, .rd-score-lbl, .pw-title, .hm-quote-auth,
+.hm-sec-title, .edit-habit-title, .char-title {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.tb-eyebrow, .why-eyebrow, .rd-score-cap, .hm-hero-date, .sec-lbl, .pw-status-badge {
+  font-weight: 700;
+}
+/* Soul moments stay serif: the Why, the daily quote, the wisdom block */
+.why-quote, .hm-quote-text, .q-text { font-family: var(--serif); }
