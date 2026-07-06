@@ -1183,12 +1183,16 @@ async function lbSyncStats() {
 async function renderLeaderboard() {
   const uid = getCurrentUserId();
   if (!uid) {
+    let invited = null;
+    try { invited = localStorage.getItem('hvi_pending_join'); } catch {}
     document.getElementById('view').innerHTML = `
       <button class="back" onclick="go('home')"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg> Back</button>
       <div class="page-head ani"><div class="page-title">Leaderboard</div><div class="page-sub">Compete with friends on streaks and XP.</div></div>
       <div class="guest-cta" style="margin:8px 24px">
-        <div class="guest-cta-text">Create a free account to start a group and climb the leaderboard with friends.</div>
-        <button class="guest-cta-btn" onclick="if(typeof showSignup==='function')showSignup()">Create free account</button>
+        <div class="guest-cta-text">${invited
+          ? "You've been invited to a group. Create a free account (10 seconds) and you'll join it automatically."
+          : 'Create a free account to start a group and climb the leaderboard with friends.'}</div>
+        <button class="guest-cta-btn" onclick="if(typeof showSignup==='function')showSignup()">${invited ? 'Create account & join' : 'Create free account'}</button>
       </div>`;
     return;
   }
@@ -1425,17 +1429,15 @@ function _isStale(updatedAt) {
 }
 
 function _shareGroupCode(code, name) {
-  const text = `Join my Arete group "${name}"! Use code: ${code}\n\nDownload Arete: https://get-arete.com`;
+  const url = `https://get-arete.com/?join=${code}`;
+  const text = `Join my Arete group "${name}" — tap to join and let's compete:\n${url}`;
+  const done = () => { if (typeof _showToast === 'function') _showToast('Invite link copied!'); };
   if (navigator.share) {
-    navigator.share({ title: `Join ${name} on Arete`, text }).catch(() => {
-      navigator.clipboard.writeText(text).then(() => {
-        if (typeof _showToast === 'function') _showToast('Invite copied!');
-      });
+    navigator.share({ title: `Join ${name} on Arete`, text, url }).catch(() => {
+      navigator.clipboard.writeText(text).then(done).catch(() => {});
     });
   } else {
-    navigator.clipboard.writeText(text).then(() => {
-      if (typeof _showToast === 'function') _showToast('Invite copied!');
-    });
+    navigator.clipboard.writeText(text).then(done).catch(() => {});
   }
   track('leaderboard_share', { code });
 }

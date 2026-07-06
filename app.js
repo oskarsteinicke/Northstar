@@ -1061,6 +1061,41 @@ async function init() {
       setTimeout(() => checkWeeklyRecap(), 600);
     })();
   }
+  // Handle a leaderboard invite link (?join=CODE)
+  _handlePendingJoin();
+}
+
+// Someone opened a shared invite link. Auto-join the group if signed in; if a
+// guest, keep the code and route them to the leaderboard's join CTA. Retries
+// while social.js (which owns the join fn) finishes lazy-loading.
+function _handlePendingJoin(_tries) {
+  let code = null;
+  try { code = localStorage.getItem('hvi_pending_join'); } catch {}
+  if (!code) return;
+  if (!getAccessToken()) {
+    // Guest: send them to the leaderboard, which shows an invite-aware CTA.
+    // Wait for social.js (owns renderLeaderboard) to finish lazy-loading.
+    if (typeof renderLeaderboard !== 'function') {
+      if ((_tries || 0) < 12) return void setTimeout(() => _handlePendingJoin((_tries || 0) + 1), 500);
+      return;
+    }
+    if (curView !== 'leaderboard') go('leaderboard');
+    return;
+  }
+  if (typeof _lbJoinGroupByCode !== 'function') {
+    if ((_tries || 0) < 12) return void setTimeout(() => _handlePendingJoin((_tries || 0) + 1), 500);
+    return;
+  }
+  _lbJoinGroupByCode(code).then(res => {
+    try { localStorage.removeItem('hvi_pending_join'); } catch {}
+    if (res && res.group) {
+      _lbView = 'group'; _lbActiveGroup = res.group.id;
+      go('leaderboard');
+      if (typeof _showToast === 'function') _showToast('Joined ' + res.group.name + ' 🏆');
+    } else if (res && res.error) {
+      if (typeof _showToast === 'function') _showToast(res.error);
+    }
+  }).catch(() => {});
 }
 
 function checkReset() {

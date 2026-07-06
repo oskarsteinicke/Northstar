@@ -19,6 +19,13 @@
   <meta name="twitter:description" content="Habits, workouts, nutrition & AI coaching. Free forever.">
   <meta name="twitter:image" content="https://get-arete.com/og-image.png">
   <script>
+    // Leaderboard invite link (?join=CODE): remember it and skip the landing page
+    (function(){
+      try {
+        var j = new URLSearchParams(location.search).get('join');
+        if (j) { localStorage.setItem('hvi_pending_join', j.toUpperCase()); localStorage.setItem('hvi_from_landing','1'); }
+      } catch(e){}
+    })();
     // New visitors see landing page; existing users go straight to app
     if (!localStorage.getItem('hvi_habits') && !localStorage.getItem('hvi_onboarded') && !localStorage.getItem('hvi_from_landing') && !navigator.standalone && !window.matchMedia('(display-mode: standalone)').matches) {
       window.location.replace('/landing.html');
@@ -37,7 +44,7 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=118">
+  <link rel="stylesheet" href="style.css?v=119">
 </head>
 <body>
 <div id="grain" aria-hidden="true"></div>
@@ -100,27 +107,27 @@
     </button>
   </nav>
 </div>
-<script src="data.js?v=118"></script>
-<script src="app.js?v=118"></script>
-<script src="connect.js?v=118"></script>
-<script src="premium.js?v=118"></script>
-<script src="workout.js?v=118"></script>
-<script src="diet.js?v=118"></script>
+<script src="data.js?v=119"></script>
+<script src="app.js?v=119"></script>
+<script src="connect.js?v=119"></script>
+<script src="premium.js?v=119"></script>
+<script src="workout.js?v=119"></script>
+<script src="diet.js?v=119"></script>
 <script>
 // Stub coach functions until lazy-loaded
 if(typeof openCoach==='undefined'){window.openCoach=function(){};window.closeCoach=function(){};window.sendCoachMsg=function(){};window.clearCoachHistory=function(){}}
 // Lazy-load coach + social after first paint for faster startup
 (window.requestIdleCallback||function(cb){setTimeout(cb,800)})(function(){
-  var s1=document.createElement('script');s1.src='coach.js?v=118';document.body.appendChild(s1);
-  var s2=document.createElement('script');s2.src='social.js?v=118';document.body.appendChild(s2);
+  var s1=document.createElement('script');s1.src='coach.js?v=119';document.body.appendChild(s1);
+  var s2=document.createElement('script');s2.src='social.js?v=119';document.body.appendChild(s2);
 });
 </script>
-<script src="integrations.js?v=118"></script>
-<script src="profile.js?v=118"></script>
+<script src="integrations.js?v=119"></script>
+<script src="profile.js?v=119"></script>
 <script>
   if ('serviceWorker' in navigator) {
     // Purge ALL old caches on load to ensure fresh files
-    caches.keys().then(ks => ks.filter(k => k !== 'arete-v89').forEach(k => caches.delete(k)));
+    caches.keys().then(ks => ks.filter(k => k !== 'arete-v90').forEach(k => caches.delete(k)));
     navigator.serviceWorker.register('/service-worker.js').then(reg => {
       reg.update();
     });
