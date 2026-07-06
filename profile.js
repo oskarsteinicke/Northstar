@@ -348,10 +348,11 @@ function injectGamificationStyles() {
     .g-weekly{padding:0 24px 8px}
     .w-set-del{background:none;border:none;color:var(--text-dim);font-size:14px;padding:4px 6px;cursor:pointer;flex-shrink:0;opacity:0.4;margin-left:auto}
     .w-set-del:active{opacity:1;color:var(--fat)}
-    .w-ex-tip{font-size:11.5px;padding:4px 16px 8px;line-height:1.4;border-radius:6px;margin:0 0 4px}
-    .w-ex-tip-increase{color:var(--accent-b)}
-    .w-ex-tip-maintain{color:var(--carb)}
-    .w-ex-tip-first{color:var(--text-dim);font-style:italic}
+    .w-ex-tip{font-size:11.5px;line-height:1.45;margin:2px 12px 8px;padding:8px 12px;border-radius:10px;background:var(--surface2);border:1px solid var(--border2);color:var(--text-dim);display:flex;align-items:center;gap:8px}
+    .w-ex-tip::before{content:"";width:6px;height:6px;border-radius:50%;flex-shrink:0;background:var(--text-muted)}
+    .w-ex-tip-increase::before{background:var(--carb)}
+    .w-ex-tip-maintain::before{background:var(--accent-b)}
+    .w-ex-tip-first::before{background:var(--pro)}
     /* Calendar */
     .cal-hdr{display:flex;align-items:center;justify-content:space-between;padding:16px 20px 8px}
     .cal-month-label{font-family:var(--serif);font-size:18px;color:var(--text);text-align:center;flex:1}

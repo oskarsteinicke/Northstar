@@ -115,7 +115,7 @@ function getLastExerciseSession(exerciseId) {
 
 function getProgressionTip(exerciseId) {
   const last = getLastExerciseSession(exerciseId);
-  if (!last) return { type: 'first', msg: '🆕 First time — focus on form, pick a manageable weight' };
+  if (!last) return { type: 'first', msg: 'First time — focus on form, pick a manageable weight' };
 
   const { date, ex } = last;
   const allSets = ex.sets || [];
@@ -133,8 +133,8 @@ function getProgressionTip(exerciseId) {
   if (!weightedSets.length && bwSets.length) {
     const maxReps = Math.max(...bwSets.map(s => s.reps));
     const allDone = completedSets.length >= allSets.length;
-    if (allDone) return { type: 'increase', msg: `📈 Last: ${maxReps} reps/set ${dLabel} — try +1 rep per set today` };
-    return { type: 'maintain', msg: `🎯 ${completedSets.length}/${allSets.length} sets ${dLabel} — hit all sets before adding reps` };
+    if (allDone) return { type: 'increase', msg: `Last: ${maxReps} reps/set ${dLabel} — try +1 rep per set today` };
+    return { type: 'maintain', msg: `${completedSets.length}/${allSets.length} sets ${dLabel} — hit all sets before adding reps` };
   }
 
   if (!weightedSets.length) return null;
@@ -149,12 +149,12 @@ function getProgressionTip(exerciseId) {
   if (allSetsComplete && allRepsHit) {
     const inc = maxW >= 80 ? 2.5 : maxW >= 40 ? 2.5 : 1.25;
     const next = +(maxW + inc).toFixed(2).replace(/\.?0+$/, '');
-    return { type: 'increase', msg: `📈 All sets hit (${maxW} × ${avgReps}) ${dLabel} — try ${next} today` };
+    return { type: 'increase', msg: `All sets hit (${maxW} × ${avgReps}) ${dLabel} — try ${next} today` };
   }
   if (allSetsComplete && !allRepsHit) {
-    return { type: 'maintain', msg: `🎯 Last: ${maxW} × avg ${avgReps} reps ${dLabel} — hit ${targetReps} reps before going heavier` };
+    return { type: 'maintain', msg: `Last: ${maxW} × avg ${avgReps} reps ${dLabel} — hit ${targetReps} reps before going heavier` };
   }
-  return { type: 'maintain', msg: `🎯 ${completedSets.length}/${allSets.length} sets at ${maxW} ${dLabel} — complete all sets first` };
+  return { type: 'maintain', msg: `${completedSets.length}/${allSets.length} sets at ${maxW} ${dLabel} — complete all sets first` };
 }
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -388,7 +388,7 @@ function renderWorkoutActive() {
       <div id="w-sets-${ei}">${setsHTML}</div>
       <div class="w-set-actions">
         <button class="w-add-set" onclick="addSet(${ei})">+ Add Set</button>
-        <button class="w-add-set" id="w-rm-${ei}" style="color:var(--fat);opacity:0.7;${canRemove ? '' : 'display:none'}" onclick="removeSet(${ei})">− Remove Set</button>
+        <button class="w-add-set" id="w-rm-${ei}" style="color:var(--fat);opacity:0.5;${canRemove ? '' : 'display:none'}" onclick="removeSet(${ei})">− Remove Set</button>
       </div></div>`;
   }).join('');
 
@@ -1271,8 +1271,8 @@ function buildExerciseSparkline(exerciseId) {
     const y = h - ((s.vol - minV) / range) * h;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   }).join(' ');
-  const trend = sessions[sessions.length-1].vol >= sessions[0].vol;
-  const col = trend ? 'var(--accent-b)' : 'var(--fat)';
+  // Single calm gold regardless of direction — a down week isn't an error
+  const col = 'var(--accent-b)';
   return `<svg viewBox="0 0 ${w} ${h}" class="w-sparkline" style="width:80px;height:24px">
     <polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>`;

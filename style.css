@@ -426,7 +426,7 @@ nav {
   justify-content: space-between;
   align-items: flex-start;
 }
-.w-ex-name { font-size: 15px; color: var(--text); font-weight: 500; }
+.w-ex-name { font-size: 15px; color: var(--text); font-weight: 600; }
 .w-ex-muscle { font-size: 10px; color: var(--text-dim); letter-spacing: 1px; text-transform: uppercase; margin-top: 2px; }
 
 .w-set {
@@ -472,7 +472,7 @@ nav {
 .w-add-set {
   padding: 8px 16px 12px;
   font-size: 11px;
-  color: var(--accent);
+  color: var(--text-dim);
   cursor: pointer;
   background: none;
   border: none;
@@ -485,10 +485,10 @@ nav {
 .w-set-warmup { opacity: 0.55; }
 .w-set-warmup .w-set-num { background: var(--surface2); color: var(--text-muted); font-size: 10px; font-weight: 700; }
 
-/* Exercise action buttons (reorder, swap) */
-.w-ex-actions { display: flex; gap: 6px; padding: 4px 0 6px; }
-.w-ex-act-btn { background: var(--surface2); border: 1px solid var(--border2); border-radius: 6px; color: var(--text-dim); font-size: 13px; padding: 4px 10px; cursor: pointer; transition: all 0.2s; }
-.w-ex-act-btn:hover { border-color: var(--accent); color: var(--accent-b); }
+/* Exercise action buttons (reorder, swap) — quiet ghost icons */
+.w-ex-actions { display: flex; gap: 2px; padding: 0 10px 2px; justify-content: flex-end; }
+.w-ex-act-btn { background: none; border: none; border-radius: 8px; color: var(--text-muted); font-size: 12px; padding: 3px 8px; cursor: pointer; transition: all 0.2s; }
+.w-ex-act-btn:hover { color: var(--accent-b); background: var(--surface2); }
 
 /* Workout notes */
 .w-notes-wrap { padding: 8px 24px 0; }
