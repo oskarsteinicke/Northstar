@@ -1490,7 +1490,8 @@ function renderStats() {
          <button class="w-action-btn" style="margin:8px 24px 32px" onclick="showAuth()">Already have an account? Sign in</button>`
       : `<button class="w-action-btn" style="margin:0 24px 8px" onclick="forceSync()" id="force-sync-btn">${icon('refresh')} Force Sync Now</button>
          <div id="sync-log" style="margin:0 24px 8px;font-size:11px;color:var(--text-dim);max-height:120px;overflow:auto;font-family:monospace;white-space:pre-wrap"></div>
-         <button class="w-action-btn" style="margin:0 24px 32px;color:var(--fat);border-color:var(--fat)" onclick="if(confirm('Sign out?'))authSignOut()">Sign Out</button>`}`;
+         <button class="w-action-btn" style="margin:0 24px 32px;color:var(--fat);border-color:var(--fat)" onclick="if(confirm('Sign out?'))authSignOut()">Sign Out</button>`}
+    <div style="text-align:center;padding:0 24px 28px;font-size:10px;color:var(--text-muted);letter-spacing:0.08em">ARETE ${(() => { try { return 'v' + (document.querySelector('script[src*="app.js?v="]').src.match(/v=(\d+)/) || [])[1]; } catch { return ''; } })()}</div>`;
   qTimer = setInterval(() => rotQ(1), 30000);
 }
 
