@@ -1,0 +1,9 @@
+{
+  "appId": "com.getarete.app",
+  "appName": "Arete",
+  "webDir": "www",
+  "backgroundColor": "#0c0c0d",
+  "ios": {
+    "contentInset": "always"
+  }
+}
