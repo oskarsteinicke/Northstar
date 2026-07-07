@@ -1119,11 +1119,11 @@ async function _lbFetchMyGroups() {
   if (!uid) return [];
   await _ensureFreshToken();
 
-  // Get my memberships
+  // Get my memberships. Returns null on load error — distinct from [] (no groups)
   const res = await fetch(`${SUPABASE_URL}/rest/v1/leaderboard_members?user_id=eq.${uid}&select=group_id`, {
     headers: _lbHeaders(),
   });
-  if (!res.ok) return [];
+  if (!res.ok) { console.warn('[lb] fetch memberships failed:', res.status); return null; }
   const memberships = await res.json();
   if (!memberships.length) return [];
 
@@ -1132,16 +1132,16 @@ async function _lbFetchMyGroups() {
   const gRes = await fetch(`${SUPABASE_URL}/rest/v1/leaderboard_groups?id=in.(${ids.join(',')})&select=*`, {
     headers: _lbHeaders(),
   });
-  if (!gRes.ok) return [];
+  if (!gRes.ok) { console.warn('[lb] fetch groups failed:', gRes.status); return null; }
   return gRes.json();
 }
 
 async function _lbFetchGroupMembers(groupId) {
   await _ensureFreshToken();
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/leaderboard_members?group_id=eq.${groupId}&select=*&order=stats->>xp.desc`, {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/leaderboard_members?group_id=eq.${groupId}&select=*`, {
     headers: _lbHeaders(),
   });
-  if (!res.ok) return [];
+  if (!res.ok) { console.warn('[lb] fetch members failed:', res.status); return null; }
   return res.json();
 }
 
@@ -1213,7 +1213,10 @@ async function renderLeaderboard() {
     const el = document.getElementById('lb-content');
     if (!el) return;
 
-    if (!groups.length) {
+    if (groups === null) {
+      el.innerHTML = `
+        <div class="lb-error" style="margin:8px 0">Couldn't load your groups. <span style="text-decoration:underline;cursor:pointer" onclick="renderLeaderboard()">Retry</span></div>`;
+    } else if (!groups.length) {
       el.innerHTML = `
         <div class="empty-state" style="padding:32px 0">
           <div class="empty-state-icon">🏆</div>
@@ -1351,8 +1354,9 @@ async function _renderGroupLeaderboard(groupId) {
       _lbFetchGroupMembers(groupId),
     ]);
 
-    const group = groups[0];
+    const group = Array.isArray(groups) ? groups[0] : null;
     if (!group) { _lbView = 'list'; renderLeaderboard(); return; }
+    if (!members) throw new Error('members load failed');
 
     const uid = getCurrentUserId();
     // Sort by XP descending

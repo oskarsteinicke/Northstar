@@ -45,15 +45,27 @@ CREATE POLICY "Users can join groups"
   TO authenticated
   WITH CHECK (auth.uid() = user_id);
 
--- Members can read all members in groups they belong to
+-- Members can read all members in groups they belong to.
+-- NOTE: the membership check must go through a SECURITY DEFINER function —
+-- a plain subquery on leaderboard_members inside its own policy causes
+-- "infinite recursion detected in policy" (42P17) on every SELECT.
+CREATE OR REPLACE FUNCTION public.my_leaderboard_group_ids()
+RETURNS SETOF uuid
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT group_id FROM public.leaderboard_members WHERE user_id = auth.uid()
+$$;
+
+REVOKE ALL ON FUNCTION public.my_leaderboard_group_ids() FROM anon, public;
+GRANT EXECUTE ON FUNCTION public.my_leaderboard_group_ids() TO authenticated;
+
 CREATE POLICY "Members can read group members"
   ON leaderboard_members FOR SELECT
   TO authenticated
-  USING (
-    group_id IN (
-      SELECT group_id FROM leaderboard_members WHERE user_id = auth.uid()
-    )
-  );
+  USING (group_id IN (SELECT public.my_leaderboard_group_ids()));
 
 -- Members can update their own stats
 CREATE POLICY "Users can update own stats"
