@@ -308,30 +308,63 @@ function rerenderWorkoutActive() {
   if (v2) v2.scrollTop = st;
 }
 
-function renderWorkoutActive() {
-  const prog = findProgram(workoutMeta.activeProgram) || WORKOUT_PROGRAMS[0];
-  const day = prog.days[workoutMeta.currentDayIndex % prog.days.length];
-  const t = today();
+// A workout entry is "touched" once the user has logged anything into it.
+// Touched entries are never rebuilt automatically — losing a half-finished
+// session mid-gym is the worst thing this screen can do.
+function _wIsTouched(wl) {
+  if (!wl) return false;
+  if (wl.touched) return true;
+  // Entries written before the touched flag existed
+  if (wl.notes) return true;
+  return (wl.exercises || []).some(e => (e.sets || []).some(s => s.completed || s.warmup));
+}
 
-  // Initialize today's workout if not exists, or if program/day changed
-  const needsInit = !workoutLog[t] ||
-    workoutLog[t].programId !== prog.id ||
-    workoutLog[t].dayIndex !== workoutMeta.currentDayIndex;
-  if (needsInit) {
-    workoutLog[t] = { programId: prog.id, dayIndex: workoutMeta.currentDayIndex, exercises: day.ex.map(eid => {
-      const ex = lookupExercise(eid);
-      const ds = ex ? ex.ds : 3;
-      const dr = ex ? ex.dr : 10;
-      // Auto-fill weight/reps from last session
-      const last = getLastExerciseSession(eid);
-      const lastSets = (last?.ex.sets || []).filter(s => s.completed);
-      const lastW = lastSets.length ? Math.max(...lastSets.map(s => s.weight)) : 0;
-      const lastR = lastSets.length ? (lastSets[lastSets.length - 1]?.reps || dr) : dr;
-      return { exerciseId: eid, sets: Array.from({length: ds}, () => ({weight: lastW, reps: lastR, completed: false})) };
-    })};
-    LS.set('hvi_workout_log', workoutLog);
+// Mark today's entry as user-logged, then persist. Every mutation the user
+// makes on the active workout screen goes through this.
+function _wSave(wl) {
+  if (wl) wl.touched = true;
+  LS.set('hvi_workout_log', workoutLog);
+}
+
+function renderWorkoutActive() {
+  let prog = findProgram(workoutMeta.activeProgram) || WORKOUT_PROGRAMS[0];
+  const t = today();
+  const existing = workoutLog[t];
+
+  if (_wIsTouched(existing)) {
+    // The program/day pointer can drift underneath an in-progress session
+    // (cloud pull from another device, midnight rollover, a custom program
+    // that hadn't loaded yet). Follow the session that's already been logged
+    // rather than rebuilding it — rebuilding wipes every set tracked so far.
+    if (existing.programId !== prog.id || existing.dayIndex !== workoutMeta.currentDayIndex) {
+      const own = findProgram(existing.programId);
+      if (own) { prog = own; workoutMeta.activeProgram = own.id; }
+      if (typeof existing.dayIndex === 'number') workoutMeta.currentDayIndex = existing.dayIndex;
+      LS.set('hvi_workout_meta', workoutMeta);
+    }
+  } else {
+    // Nothing logged yet, so it's safe to (re)build for the current day
+    const day0 = prog.days[workoutMeta.currentDayIndex % prog.days.length];
+    const needsInit = !existing ||
+      existing.programId !== prog.id ||
+      existing.dayIndex !== workoutMeta.currentDayIndex;
+    if (needsInit) {
+      workoutLog[t] = { programId: prog.id, dayIndex: workoutMeta.currentDayIndex, exercises: day0.ex.map(eid => {
+        const ex = lookupExercise(eid);
+        const ds = ex ? ex.ds : 3;
+        const dr = ex ? ex.dr : 10;
+        // Auto-fill weight/reps from last session
+        const last = getLastExerciseSession(eid);
+        const lastSets = (last?.ex.sets || []).filter(s => s.completed);
+        const lastW = lastSets.length ? Math.max(...lastSets.map(s => s.weight)) : 0;
+        const lastR = lastSets.length ? (lastSets[lastSets.length - 1]?.reps || dr) : dr;
+        return { exerciseId: eid, sets: Array.from({length: ds}, () => ({weight: lastW, reps: lastR, completed: false})) };
+      })};
+      LS.set('hvi_workout_log', workoutLog);
+    }
   }
 
+  const day = prog.days[workoutMeta.currentDayIndex % prog.days.length];
   const wl = workoutLog[t];
 
   // Trigger background fetch for any missing wger exercises. When the data
@@ -425,7 +458,7 @@ function updateSet(ei, si, field, val) {
   if (field === 'weight' && num > 2000) num = 2000;
   if (field === 'reps' && num > 999) num = 999;
   wl.exercises[ei].sets[si][field] = num;
-  LS.set('hvi_workout_log', workoutLog);
+  _wSave(wl);
 }
 
 function toggleExInfo(ei) {
@@ -445,7 +478,7 @@ function toggleSet(ei, si) {
   if (!wl) return;
   const set = wl.exercises[ei].sets[si];
   set.completed = !set.completed;
-  LS.set('hvi_workout_log', workoutLog);
+  _wSave(wl);
   haptic(set.completed ? 12 : 6);
 
   // In-place update: flip the checkmark, refresh the card's done state
@@ -486,7 +519,7 @@ function addSet(ei) {
   const sets = wl.exercises[ei].sets;
   const last = sets[sets.length - 1];
   sets.push({ weight: last?.weight || 0, reps: last?.reps || dr, completed: false });
-  LS.set('hvi_workout_log', workoutLog);
+  _wSave(wl);
   // Append the new row in place
   const wrap = document.getElementById(`w-sets-${ei}`);
   if (wrap) wrap.insertAdjacentHTML('beforeend', _setRowHTML(ei, sets.length - 1, sets[sets.length - 1]));
@@ -503,7 +536,7 @@ function removeSet(ei) {
   const sets = wl.exercises[ei].sets;
   if (sets.length <= 1) return; // keep at least 1 set
   sets.pop();
-  LS.set('hvi_workout_log', workoutLog);
+  _wSave(wl);
   // Remove the last row in place
   const row = document.getElementById(`w-set-${ei}-${sets.length}`);
   if (row) row.remove();
@@ -521,7 +554,7 @@ function toggleWarmup(ei, si) {
   if (!wl) return;
   const s = wl.exercises[ei].sets[si];
   s.warmup = !s.warmup;
-  LS.set('hvi_workout_log', workoutLog);
+  _wSave(wl);
   // Update the row in place
   const row = document.getElementById(`w-set-${ei}-${si}`);
   if (row) row.classList.toggle('w-set-warmup', !!s.warmup);
@@ -541,7 +574,7 @@ function reorderExercise(ei, dir) {
   const tmp = wl.exercises[ei];
   wl.exercises[ei] = wl.exercises[newIdx];
   wl.exercises[newIdx] = tmp;
-  LS.set('hvi_workout_log', workoutLog);
+  _wSave(wl);
   rerenderWorkoutActive();
 }
 
@@ -561,7 +594,7 @@ function confirmSwapExercise(eid) {
     exerciseId: eid,
     sets: old.sets.map(s => ({ weight: 0, reps: ex ? ex.dr : 10, completed: false }))
   };
-  LS.set('hvi_workout_log', workoutLog);
+  _wSave(wl);
   _swapExIdx = null;
   browserContext = null;
   go('workoutActive'); // navigating back from the exercise browser — real nav
@@ -572,7 +605,7 @@ function _saveWorkoutNotes() {
   const t = today(), wl = workoutLog[t];
   if (!wl) return;
   wl.notes = (document.getElementById('w-notes')?.value || '').trim();
-  LS.set('hvi_workout_log', workoutLog);
+  _wSave(wl);
 }
 
 // ── 1RM CALCULATOR ─────────────────────────────────────────────────────
@@ -791,6 +824,9 @@ function repeatWorkout(date) {
 function shiftWorkoutDay(delta) {
   const prog = findProgram(workoutMeta.activeProgram) || WORKOUT_PROGRAMS[0];
   const len = prog.days.length;
+  // Switching days discards today's entry — confirm first if it has logged sets
+  if (_wIsTouched(workoutLog[today()]) &&
+      !confirm("You've already logged sets today. Switching days will discard them. Continue?")) return;
   workoutMeta.currentDayIndex = ((workoutMeta.currentDayIndex + delta) % len + len) % len;
   // Clear today's log so the new day initializes fresh when entering active workout
   delete workoutLog[today()];

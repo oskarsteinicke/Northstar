@@ -312,6 +312,18 @@ function _scheduleRetry() {
   }, _retryDelay);
 }
 
+// True when today's workout entry has anything the user logged into it.
+// Reads localStorage directly — cloudPull runs before in-memory state reloads.
+function _hasLoggedWorkoutToday() {
+  try {
+    const all = JSON.parse(localStorage.getItem('hvi_workout_log') || '{}');
+    const wl = all[new Date().toLocaleDateString('en-CA')];
+    if (!wl) return false;
+    if (wl.touched || wl.notes) return true;
+    return (wl.exercises || []).some(e => (e.sets || []).some(s => s.completed || s.warmup));
+  } catch { return false; }
+}
+
 async function cloudPull() {
   const uid = getCurrentUserId();
   if (!uid) return false;
@@ -369,6 +381,19 @@ async function cloudPull() {
             if ((l.streak || 0) >= (c.streak || 0)) { merged[hid] = l; }
             else { merged[hid] = { ...c, completedToday: false }; }
           });
+          localStorage.setItem(k, JSON.stringify(merged));
+        } catch { localStorage.setItem(k, JSON.stringify(cloud[k])); }
+      } else if (k === 'hvi_workout_meta') {
+        // Never move the program/day pointer out from under a workout that's
+        // already been logged into today: the active screen would see the
+        // entry as belonging to a different day and rebuild it, wiping every
+        // set tracked so far. Otherwise the more recent side wins.
+        try {
+          const local = JSON.parse(localStorage.getItem(k) || '{}');
+          const cloudM = cloud[k] || {};
+          const localWins = _hasLoggedWorkoutToday() ||
+            (local.lastWorkoutDate || '') >= (cloudM.lastWorkoutDate || '');
+          const merged = localWins ? { ...cloudM, ...local } : { ...local, ...cloudM };
           localStorage.setItem(k, JSON.stringify(merged));
         } catch { localStorage.setItem(k, JSON.stringify(cloud[k])); }
       } else if (k === 'hvi_gamification') {
