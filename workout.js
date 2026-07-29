@@ -1266,6 +1266,75 @@ function _wpRegionStrength() {
   return out;
 }
 
+// ── Relative strength ──────────────────────────────────────────────────────
+// Absolute load can't compare muscle groups: a squat will always outweigh a
+// curl. So each group's best estimated 1RM is divided by bodyweight and then
+// by what an average trained lifter puts up for that group, giving a "% of
+// average" that IS comparable across the body.
+//
+// Ratios are best e1RM / bodyweight for a roughly intermediate lifter, drawn
+// from the usual published strength standards. They are rough benchmarks, not
+// clinical values — good enough to rank your own groups against each other.
+const _WP_STD = {
+  male: {
+    chest: 1.00, shoulders: 0.60, biceps: 0.35, triceps: 0.50, forearms: 0.30,
+    abs: 0.40, obliques: 0.35, lats: 0.90, upperback: 0.90, traps: 1.20,
+    lowerback: 1.60, glutes: 1.50, quads: 1.30, hamstrings: 1.20,
+    calves: 1.30, adductors: 0.55,
+  },
+  female: {
+    chest: 0.60, shoulders: 0.38, biceps: 0.22, triceps: 0.30, forearms: 0.20,
+    abs: 0.28, obliques: 0.25, lats: 0.60, upperback: 0.60, traps: 0.80,
+    lowerback: 1.15, glutes: 1.20, quads: 1.00, hamstrings: 0.90,
+    calves: 1.00, adductors: 0.45,
+  },
+};
+
+// Bodyweight in the same unit lift loads use, so the ratio is unit-agnostic.
+// weightLog is stored in display units; tdeeProfile.weight_kg is always kg.
+function _wpBodyweight() {
+  const dates = Object.keys(weightLog || {}).sort();
+  for (let i = dates.length - 1; i >= 0; i--) {
+    const v = parseFloat(weightLog[dates[i]]);
+    if (v > 0) return v;
+  }
+  const p = (typeof tdeeProfile !== 'undefined' && tdeeProfile) || null;
+  if (p && p.weight_kg > 0) return isImperial() ? p.weight_kg * 2.205 : p.weight_kg;
+  return 0;
+}
+
+function _wpSex() {
+  const p = (typeof tdeeProfile !== 'undefined' && tdeeProfile) || null;
+  return (p && p.sex === 'female') ? 'female' : 'male';
+}
+
+// region -> { e1rm, weight, reps, name, ratio, pct }
+function _wpRelStrength() {
+  const bodyWt = _wpBodyweight();
+  const abs = _wpRegionStrength();
+  const std = _WP_STD[_wpSex()];
+  const out = {};
+  if (!bodyWt) return out;
+  Object.keys(abs).forEach(r => {
+    const s = std[r];
+    if (!s) return;
+    const ratio = abs[r].e1rm / bodyWt;
+    out[r] = Object.assign({}, abs[r], { ratio, pct: Math.round((ratio / s) * 100) });
+  });
+  return out;
+}
+
+// Fixed anchors so a colour means the same thing every time: mid gold sits at
+// roughly average, brightest is well above.
+function _wpHeatPct(pct) {
+  if (!pct) return 'rgba(255,255,255,0.07)';
+  if (pct < 60) return 'rgba(176,132,72,0.34)';
+  if (pct < 85) return 'rgba(176,132,72,0.62)';
+  if (pct < 110) return '#b8874a';
+  if (pct < 140) return '#e3b878';
+  return '#f7dcb0';
+}
+
 // Five-step gold ramp. Untrained regions stay barely lit so the figure still
 // reads as a body.
 function _wpHeat(v, max) {
@@ -1287,7 +1356,8 @@ function _wpHeat(v, max) {
 // x 724-1448, so one viewBox renders both views side by side.
 // Each AR_BODY.m entry lists the Arete regions it represents; where the artwork
 // has no separate shape (lats and upper back share one), the higher value wins.
-function _wpBodyMapSVG(vals, max) {
+function _wpBodyMapSVG(vals, max, heatFn) {
+  const heat = heatFn || ((v) => _wpHeat(v, max));
   if (typeof AR_BODY === 'undefined') {
     // bodymap.js loads on idle; re-render once it arrives
     setTimeout(() => {
@@ -1301,7 +1371,7 @@ function _wpBodyMapSVG(vals, max) {
   const muscles = AR_BODY.m.map(g => {
     const v = Math.max.apply(null, g.r.map(r => vals[r] || 0));
     const name = g.r.map(r => _WP_REGION_NAMES[r]).join(' / ');
-    const fill = _wpHeat(v, max);
+    const fill = heat(v);
     return `<g><title>${name}: ${v}</title>` +
       g.d.map(d => `<path d="${d}" fill="${fill}" ${st}/>`).join('') + '</g>';
   }).join('');
@@ -1455,31 +1525,42 @@ function renderWorkoutProgress() {
   // ── Body map: what you've trained lately, and where you're strongest ──
   const setsByRegion = _wpRegionSets(7);
   const strByRegion = _wpRegionStrength();
+  const relByRegion = _wpRelStrength();
+  const bodyWt = _wpBodyweight();
   const isStrength = _wpMode === 'strength';
+  const canRank = isStrength && bodyWt > 0 && Object.keys(relByRegion).length > 0;
 
+  // Strength mode scores each group as a percentage of an average lifter, so
+  // the colours are comparable across the body. Without a bodyweight there is
+  // nothing to normalise by, so it falls back to absolute load.
   const mapVals = {};
-  if (isStrength) Object.keys(strByRegion).forEach(r => { mapVals[r] = strByRegion[r].e1rm; });
+  if (canRank) Object.keys(relByRegion).forEach(r => { mapVals[r] = relByRegion[r].pct; });
+  else if (isStrength) Object.keys(strByRegion).forEach(r => { mapVals[r] = strByRegion[r].e1rm; });
   else Object.assign(mapVals, setsByRegion);
   const mapMax = Math.max(...Object.values(mapVals), 1);
+  const heatFn = canRank ? _wpHeatPct : null;
 
-  // Ranked list under the map, sorted by whichever mode is showing
   const ranked = Object.keys(_WP_REGION_NAMES)
     .map(r => ({
       r, sets: setsByRegion[r] || 0,
       e1rm: strByRegion[r] ? strByRegion[r].e1rm : 0,
+      pct: relByRegion[r] ? relByRegion[r].pct : 0,
       best: strByRegion[r] || null,
     }))
     .filter(x => x.sets > 0 || x.e1rm > 0)
-    .sort((a, b) => isStrength ? b.e1rm - a.e1rm : (b.sets - a.sets) || (b.e1rm - a.e1rm));
+    .sort((a, b) => canRank ? (b.pct - a.pct)
+      : isStrength ? b.e1rm - a.e1rm
+      : (b.sets - a.sets) || (b.e1rm - a.e1rm));
 
   const rankHTML = ranked.map(x => {
-    const v = isStrength ? x.e1rm : x.sets;
-    const pctW = Math.round((v / mapMax) * 100);
-    const right = isStrength
-      ? (x.e1rm ? `${Math.round(x.e1rm)} ${wtUnit()}` : '—')
+    const v = canRank ? x.pct : isStrength ? x.e1rm : x.sets;
+    const pctW = Math.max(2, Math.min(100, Math.round((v / mapMax) * 100)));
+    const right = canRank ? (x.pct ? `${x.pct}%` : '—')
+      : isStrength ? (x.e1rm ? `${Math.round(x.e1rm)} ${wtUnit()}` : '—')
       : `${x.sets} set${x.sets !== 1 ? 's' : ''}`;
-    const sub = isStrength
-      ? (x.best ? esc(x.best.name || '') : '')
+    const sub = canRank
+      ? (x.e1rm ? `${Math.round(x.e1rm)} ${wtUnit()} · ${esc((x.best && x.best.name) || '')}` : '')
+      : isStrength ? (x.best ? esc(x.best.name || '') : '')
       : (x.e1rm ? `best ${Math.round(x.e1rm)} ${wtUnit()}` : '');
     return `<div class="wp-mrow">
       <div class="wp-mname">${_WP_REGION_NAMES[x.r]}${sub ? `<span class="wp-msub">${sub}</span>` : ''}</div>
@@ -1487,6 +1568,13 @@ function renderWorkoutProgress() {
       <div class="wp-mval">${right}</div>
     </div>`;
   }).join('');
+
+  const strengthSub = canRank
+    ? 'Each group scored against an average lifter of your bodyweight — 100% is average.'
+    : 'Best estimated 1RM per muscle group.';
+  const strengthFoot = canRank
+    ? `Relative to a ${_wpSex() === 'female' ? 'female' : 'male'} lifter at ${Math.round(bodyWt)} ${wtUnit()}. Benchmarks are approximate, so read these as a guide to which groups lead and lag, not a precise ranking.`
+    : `<span style="color:var(--accent-b)">Log your bodyweight to compare against an average lifter.</span> Until then these are absolute loads, so big compound muscles rank highest.`;
 
   const muscleHTML = `
     <div class="sec-lbl ani" style="padding:18px 24px 8px">MUSCLE MAP</div>
@@ -1496,22 +1584,22 @@ function renderWorkoutProgress() {
     </div>
     <div class="wp-card ani">
       <div class="wp-card-sub" style="margin-bottom:6px">${isStrength
-        ? 'Best estimated 1RM reached for each muscle group.'
+        ? strengthSub
         : 'Working sets per muscle group over the last 7 days.'}</div>
-      ${_wpBodyMapSVG(mapVals, mapMax)}
+      ${_wpBodyMapSVG(mapVals, mapMax, heatFn)}
       <div class="wp-legend">
-        <span>${isStrength ? 'Weaker' : 'Untrained'}</span>
+        <span>${canRank ? 'Below avg' : isStrength ? 'Weaker' : 'Untrained'}</span>
         <i style="background:rgba(255,255,255,0.055)"></i>
         <i style="background:rgba(176,132,72,0.34)"></i>
         <i style="background:rgba(176,132,72,0.62)"></i>
         <i style="background:#b8874a"></i>
         <i style="background:#e3b878"></i>
         <i style="background:#f7dcb0"></i>
-        <span>${isStrength ? 'Strongest' : 'Most'}</span>
+        <span>${canRank ? 'Well above' : isStrength ? 'Strongest' : 'Most'}</span>
       </div>
       ${ranked.length ? `<div class="wp-ranklist">${rankHTML}</div>` : ''}
       <div class="wp-card-foot">${isStrength
-        ? 'Absolute loads, so big compound muscles naturally rank highest. Compare a group against itself over time rather than against the others.'
+        ? strengthFoot
         : ranked.length ? `${ranked.filter(x => x.sets > 0).length} muscle groups trained this week.` : 'No sets logged in the last 7 days.'}</div>
     </div>`;
 
