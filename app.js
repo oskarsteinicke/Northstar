@@ -57,11 +57,51 @@ let sleepLog;
 let restTimer = null, restTimerEnd = 0, restTimerDur = 90;
 
 // ── Unit helpers ──────────────────────────────────────────────────────────
+const LB_PER_KG = 2.20462;
 function isImperial() { return (settings || {}).units === 'imperial'; }
 function wtUnit() { return isImperial() ? 'lbs' : 'kg'; }
+
+// Stored weights are kept in whatever unit is on display, so any maths that
+// needs real kilograms (calories per kg, protein per kg) must convert first.
+function toKg(v) { const n = parseFloat(v) || 0; return isImperial() ? n / LB_PER_KG : n; }
+
+// Switching units has to convert what's already stored. Without this a 100 kg
+// squat silently became a 100 lb squat — the label changed, the number didn't.
 function setUnits(u) {
-  settings.units = u;
+  const next = u === 'imperial' ? 'imperial' : 'metric';
+  if (next === (isImperial() ? 'imperial' : 'metric')) return;
+  _convertStoredWeights(next === 'imperial' ? LB_PER_KG : 1 / LB_PER_KG);
+  settings.units = next;
   LS.set('hvi_settings', settings);
+}
+
+// Rescales every stored weight: the bodyweight log, every logged set, and
+// every personal record. tdeeProfile.weight_kg is deliberately excluded —
+// it is always held in kilograms and converted at the point of use.
+function _convertStoredWeights(f) {
+  const conv = v => Math.round((parseFloat(v) || 0) * f * 10) / 10;
+
+  let touched = false;
+  Object.keys(weightLog || {}).forEach(d => {
+    if (parseFloat(weightLog[d]) > 0) { weightLog[d] = conv(weightLog[d]); touched = true; }
+  });
+  if (touched) LS.set('hvi_weight_log', weightLog);
+
+  touched = false;
+  Object.keys(workoutLog || {}).forEach(d => {
+    ((workoutLog[d] || {}).exercises || []).forEach(ex => {
+      (ex.sets || []).forEach(s => {
+        if (parseFloat(s.weight) > 0) { s.weight = conv(s.weight); touched = true; }
+      });
+    });
+  });
+  if (touched) LS.set('hvi_workout_log', workoutLog);
+
+  touched = false;
+  Object.keys(prs || {}).forEach(k => {
+    if (prs[k] && parseFloat(prs[k].weight) > 0) { prs[k].weight = conv(prs[k].weight); touched = true; }
+  });
+  if (touched) LS.set('hvi_prs', prs);
 }
 
 // ── SUPABASE AUTH + CLOUD SYNC ────────────────────────────────────────────

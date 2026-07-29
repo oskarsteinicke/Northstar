@@ -404,7 +404,8 @@ function computeTDEE(wl, ml) {
   const avgCal = computeWeeklyAvgCalories(ml);
   if (avgCal === null) return null;
   const last7 = trend.slice(-7);
-  const weightChange = last7[last7.length - 1].ema - last7[0].ema;
+  // 7700 kcal is per KILOGRAM, so the trend delta has to be in kg
+  const weightChange = toKg(last7[last7.length - 1].ema - last7[0].ema);
   const weightChangeCalsPerDay = (weightChange * 7700) / 7;
   return Math.round(Math.min(6000, Math.max(1200, avgCal - weightChangeCalsPerDay)));
 }
@@ -414,8 +415,9 @@ function computeAdaptiveTarget(tdee, goalType, wl) {
   const offsets = { cut: -400, maintain: 0, bulk: 300 };
   const calories = Math.round(tdee + (offsets[goalType] || 0));
   const entries = Object.entries(wl).sort((a,b) => b[0].localeCompare(a[0]));
-  const bw = entries.length ? entries[0][1] : 80;
-  return { calories, protein: Math.round(bw * 2.2) };
+  // 2.2 g of protein per KILOGRAM of bodyweight; the 80 fallback is already kg
+  const bwKg = entries.length ? toKg(entries[0][1]) : 80;
+  return { calories, protein: Math.round(bwKg * 2.2) };
 }
 
 function injectAdaptiveStyles() {
