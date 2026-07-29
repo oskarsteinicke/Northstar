@@ -806,9 +806,22 @@ async function calculateMealDescription() {
   }
 }
 
+// Photo scan and text description share this list but render into different
+// containers on the same screen. Remember which one is live so the edit,
+// cancel and remove handlers — which call this with no argument — rebuild the
+// list where the user is actually looking instead of the other section.
+let _parsedOutId = 'describe-output';
+
 function _renderParsedItems(out) {
-  if (!out) out = document.getElementById('describe-output');
+  // An explicit container means a fresh set of results, so drop any row that
+  // was left open for editing from the previous set.
+  if (out && out.id) { _parsedOutId = out.id; _editingParsedIdx = -1; }
+  if (!out) out = document.getElementById(_parsedOutId);
   if (!out) return;
+  // Results only belong to the section that produced them
+  const otherId = _parsedOutId === 'photo-output' ? 'describe-output' : 'photo-output';
+  const other = document.getElementById(otherId);
+  if (other) other.innerHTML = '';
   if (!_parsedMealItems.length) { out.innerHTML = ''; return; }
   const rows = _parsedMealItems.map((it, i) => {
     const editing = _editingParsedIdx === i;
