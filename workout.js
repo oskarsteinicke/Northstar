@@ -1282,127 +1282,34 @@ function _wpHeat(v, max) {
 // the figure's centre line; `mid` shapes sit on the centre line.
 // A dark silhouette is drawn first so untrained gaps (joints, hips, hands)
 // read as body rather than holes; muscle shapes sit on top of it.
-// Anatomical figure, 150x404 per view, centre line x=75, ~7.5 heads tall.
-// Muscle regions TILE the body: the dark base shows only at head, hands, feet
-// and the thin seams between muscles, so an untrained group reads as a dim
-// muscle rather than a hole. Each region is a list of paths so a muscle can be
-// drawn as its separate heads.
-const _WP_SILHOUETTE = [
-  'M75,8 C86,8 93,19 93,32 C93,46 86,56 75,56 C64,56 57,46 57,32 C57,19 64,8 75,8 Z',
-  'M66,48 C66,58 65,66 62,71 L88,71 C85,66 84,58 84,48 Z',
-  'M62,68 C50,72 41,79 36,88 C31,97 30,109 33,122 L38,152 C42,168 48,180 54,187 L54,205 L96,205 L96,187 C102,180 108,168 112,152 L117,122 C120,109 119,97 114,88 C109,79 100,72 88,68 Z',
-  'M53,198 C52,214 56,228 63,238 L87,238 C94,228 98,214 97,198 Z',
-  'M40,84 C31,89 26,100 26,113 L23,150 C21,172 19,192 19,210 C19,222 22,231 26,236 L41,233 C43,224 43,214 43,205 C44,186 46,166 48,150 L50,113 C51,99 47,89 40,84 Z',
-  'M110,84 C119,89 124,100 124,113 L127,150 C129,172 131,192 131,210 C131,222 128,231 124,236 L109,233 C107,224 107,214 107,205 C106,186 104,166 102,150 L100,113 C99,99 103,89 110,84 Z',
-  'M24,231 C20,240 20,251 24,258 C28,264 35,264 38,259 C41,254 42,244 41,235 L40,230 Z',
-  'M126,231 C130,240 130,251 126,258 C122,264 115,264 112,259 C109,254 108,244 109,235 L110,230 Z',
-  'M50,232 C46,252 45,272 47,292 L49,322 C50,342 52,358 54,370 L70,370 C71,358 72,342 73,322 L75,292 C77,272 76,252 72,232 Z',
-  'M100,232 C104,252 105,272 103,292 L101,322 C100,342 98,358 96,370 L80,370 C79,358 78,342 77,322 L75,292 C73,272 74,252 78,232 Z',
-  'M54,366 C53,375 53,381 55,384 L71,384 C72,380 72,374 71,366 Z',
-  'M96,366 C97,375 97,381 95,384 L79,384 C78,380 78,374 79,366 Z',
-];
-
-const _WP_BODY = {
-  front: {
-    muscles: {
-      traps: { sym: ['M67,60 C60,66 50,74 40,85 L53,90 C59,82 64,72 68,66 Z'] },
-      shoulders: { sym: [
-        'M40,84 C31,89 27,100 27,113 C27,124 31,132 38,136 C45,133 49,125 50,114 C51,101 48,90 44,85 Z',
-        'M45,88 C49,93 52,101 53,110 C54,118 53,125 51,130 C48,125 47,117 47,108 Z',
-      ] },
-      chest: { sym: ['M74,90 L54,92 C45,95 41,102 41,112 L42,124 C48,129 58,131 74,130 Z'] },
-      biceps: { sym: [
-        'M29,134 C25,145 24,158 26,169 C29,177 37,179 44,175 C47,164 48,149 47,137 Z',
-        'M44,140 C46,150 46,162 45,172 C42,168 42,156 42,146 Z',
-      ] },
-      forearms: { sym: ['M25,172 C21,186 20,202 20,214 C20,224 23,231 28,234 C34,231 37,223 38,212 C40,196 41,182 41,172 C36,167 30,167 25,172 Z'] },
-      abs: { mid: [
-        'M63,134 C67,133 71,133 74,134 L74,149 C70,150 66,150 63,149 Z',
-        'M76,134 C79,133 83,133 87,134 L87,149 C84,150 80,150 76,149 Z',
-        'M63,151 C67,150 71,150 74,151 L74,166 C70,167 66,167 63,166 Z',
-        'M76,151 C79,150 83,150 87,151 L87,166 C84,167 80,167 76,166 Z',
-        'M64,168 C67,167 71,167 74,168 L74,183 C70,184 67,184 64,183 Z',
-        'M76,168 C79,167 83,167 86,168 L86,183 C83,184 80,184 76,183 Z',
-        'M65,185 C68,184 71,184 74,185 L74,198 C71,202 68,201 67,197 Z',
-        'M76,185 C79,184 82,184 85,185 L83,197 C82,201 79,202 76,198 Z',
-      ] },
-      obliques: { sym: ['M41,133 C39,147 41,163 46,177 C50,188 55,196 61,199 L61,133 Z'] },
-      quads: { sym: [
-        'M49,226 C45,250 45,272 47,293 L57,294 C57,272 57,250 58,228 Z',
-        'M59,225 C58,250 58,272 59,294 L68,294 C69,272 69,250 68,225 Z',
-        'M68,260 C70,273 71,283 71,295 L75,295 C76,282 76,270 75,257 Z',
-      ] },
-      adductors: { sym: ['M67,226 C69,238 70,249 70,260 L75,260 L75,226 Z'] },
-      calves: { sym: [
-        'M52,298 C49,314 48,330 49,347 L59,349 C60,332 60,316 59,300 Z',
-        'M61,298 C61,315 61,331 62,349 L71,347 C72,330 71,314 69,298 Z',
-      ] },
-    },
-    detail: [
-      'M75,88 L75,132', 'M40,114 C51,124 62,130 74,131', 'M110,114 C99,124 88,130 76,131',
-      'M75,134 L75,199', 'M63,150 L87,150', 'M63,167 L87,167', 'M64,184 L86,184',
-    ],
-  },
-  back: {
-    muscles: {
-      traps: { mid: [
-        'M75,59 C67,64 55,74 43,85 L57,92 C63,86 69,81 75,78 C81,81 87,86 93,92 L107,85 C95,74 83,64 75,59 Z',
-        'M67,86 C70,84 80,84 83,86 L80,148 L75,152 L70,148 Z',
-      ] },
-      shoulders: { sym: [
-        'M40,84 C31,89 27,100 27,113 C27,124 31,132 38,136 C45,133 49,125 50,114 C51,101 48,90 44,85 Z',
-        'M45,88 C49,93 52,101 53,110 C54,118 53,125 51,130 C48,125 47,117 47,108 Z',
-      ] },
-      lats: { sym: ['M45,102 C38,116 36,134 40,152 C44,167 54,177 68,181 L75,175 L75,152 L63,148 C59,133 53,116 47,104 Z'] },
-      upperback: { sym: ['M50,92 C53,102 56,112 60,120 L71,124 L71,98 C64,95 56,93 50,92 Z'] },
-      lowerback: { mid: ['M62,157 C62,172 65,187 70,199 L80,199 C85,187 88,172 88,157 C82,154 68,154 62,157 Z'] },
-      triceps: { sym: [
-        'M29,134 C25,145 24,158 26,169 C29,177 37,179 44,175 C47,164 48,149 47,137 Z',
-        'M31,140 C30,152 30,163 32,172 C35,168 35,155 34,145 Z',
-      ] },
-      forearms: { sym: ['M25,172 C21,186 20,202 20,214 C20,224 23,231 28,234 C34,231 37,223 38,212 C40,196 41,182 41,172 C36,167 30,167 25,172 Z'] },
-      glutes: { sym: ['M51,203 C46,215 45,230 48,243 C52,254 62,259 74,255 L75,232 L75,203 Z'] },
-      hamstrings: { sym: [
-        'M49,258 C46,274 46,290 48,304 L58,304 C58,288 58,272 58,258 Z',
-        'M59,258 C59,276 59,290 60,304 L70,302 C71,286 70,272 69,258 Z',
-      ] },
-      calves: { sym: [
-        'M52,310 C49,326 49,342 51,356 L60,356 C61,340 61,324 60,310 Z',
-        'M62,310 C62,326 62,342 63,356 L71,354 C72,338 71,322 69,310 Z',
-      ] },
-    },
-    detail: [
-      'M75,100 L75,199', 'M43,84 C56,94 66,102 72,112', 'M107,84 C94,94 84,102 78,112',
-      'M75,258 L75,303', 'M75,310 L75,355',
-    ],
-  },
-};
-
-function _wpFigure(side, vals, max, xOff) {
-  const spec = _WP_BODY[side];
-  const statics = _WP_SILHOUETTE.map(d =>
-    `<path d="${d}" fill="rgba(255,255,255,0.05)"/>`).join('');
-  const stroke = 'stroke="rgba(0,0,0,0.45)" stroke-width="0.6" stroke-linejoin="round"';
-  const muscles = Object.entries(spec.muscles).map(([region, shape]) => {
-    const v = vals[region] || 0;
-    const fill = _wpHeat(v, max);
-    const title = `<title>${_WP_REGION_NAMES[region]}: ${v}</title>`;
-    const list = shape.mid || shape.sym;
-    const draw = list.map(d => `<path d="${d}" fill="${fill}" ${stroke}/>`).join('');
-    if (shape.mid) return `<g>${title}${draw}</g>`;
-    return `<g>${title}${draw}<g transform="translate(150,0) scale(-1,1)">${draw}</g></g>`;
-  }).join('');
-  const detail = (spec.detail || []).map(d =>
-    `<path d="${d}" fill="none" stroke="rgba(0,0,0,0.28)" stroke-width="0.6"/>`).join('');
-  return `<g transform="translate(${xOff},0)">${statics}${muscles}${detail}
-    <text x="75" y="398" fill="var(--text-muted)" font-size="11" text-anchor="middle" letter-spacing="1">${side === 'front' ? 'FRONT' : 'BACK'}</text>
-  </g>`;
-}
-
+// The figure artwork lives in bodymap.js (lazy-loaded) as AR_BODY: real
+// anatomical muscle paths on a 1448x1448 canvas, front at x 0-724 and back at
+// x 724-1448, so one viewBox renders both views side by side.
+// Each AR_BODY.m entry lists the Arete regions it represents; where the artwork
+// has no separate shape (lats and upper back share one), the higher value wins.
 function _wpBodyMapSVG(vals, max) {
-  return `<svg viewBox="0 0 318 404" style="width:100%;display:block" role="img"
+  if (typeof AR_BODY === 'undefined') {
+    // bodymap.js loads on idle; re-render once it arrives
+    setTimeout(() => {
+      if (typeof AR_BODY !== 'undefined' && curView === 'workoutProgress') renderWorkoutProgress();
+    }, 400);
+    return '<div class="wp-card-sub" style="padding:28px 0;text-align:center">Loading body map…</div>';
+  }
+  const st = 'stroke="rgba(0,0,0,0.45)" stroke-width="2" stroke-linejoin="round"';
+  const statics = AR_BODY.s.map(d =>
+    `<path d="${d}" fill="rgba(255,255,255,0.06)"/>`).join('');
+  const muscles = AR_BODY.m.map(g => {
+    const v = Math.max.apply(null, g.r.map(r => vals[r] || 0));
+    const name = g.r.map(r => _WP_REGION_NAMES[r]).join(' / ');
+    const fill = _wpHeat(v, max);
+    return `<g><title>${name}: ${v}</title>` +
+      g.d.map(d => `<path d="${d}" fill="${fill}" ${st}/>`).join('') + '</g>';
+  }).join('');
+  return `<svg viewBox="0 0 1448 1520" style="width:100%;display:block" role="img"
     aria-label="Muscle map coloured by training">
-    ${_wpFigure('front', vals, max, 4)}${_wpFigure('back', vals, max, 164)}
+    ${statics}${muscles}
+    <text x="362" y="1508" fill="var(--text-muted)" font-size="36" text-anchor="middle" letter-spacing="5">FRONT</text>
+    <text x="1086" y="1508" fill="var(--text-muted)" font-size="36" text-anchor="middle" letter-spacing="5">BACK</text>
   </svg>`;
 }
 
