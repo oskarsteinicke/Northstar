@@ -1324,15 +1324,29 @@ function _wpRelStrength() {
   return out;
 }
 
-// Fixed anchors so a colour means the same thing every time: mid gold sits at
-// roughly average, brightest is well above.
+// Strength tiers. Thresholds are "% of an average lifter", so Intermediate
+// straddles 100%. Deliberately named apart from the character LEVEL_TITLES so
+// a strength rank is never mistaken for an account level.
+const _WP_TIERS = [
+  { min: 0,   name: 'Untrained',    color: 'rgba(255,255,255,0.07)' },
+  { min: 1,   name: 'Novice',       color: 'rgba(176,132,72,0.34)' },
+  { min: 60,  name: 'Apprentice',   color: 'rgba(176,132,72,0.62)' },
+  { min: 85,  name: 'Intermediate', color: '#b8874a' },
+  { min: 110, name: 'Advanced',     color: '#e3b878' },
+  { min: 140, name: 'Elite',        color: '#f7dcb0' },
+  { min: 175, name: 'Demigod',      color: '#fff1d6' },
+];
+
+function _wpTier(pct) {
+  let t = _WP_TIERS[0];
+  for (const x of _WP_TIERS) { if ((pct || 0) >= x.min) t = x; }
+  return t;
+}
+
+// Fixed anchors so a colour always means the same tier, rather than shading
+// relative to whatever the user happens to train.
 function _wpHeatPct(pct) {
-  if (!pct) return 'rgba(255,255,255,0.07)';
-  if (pct < 60) return 'rgba(176,132,72,0.34)';
-  if (pct < 85) return 'rgba(176,132,72,0.62)';
-  if (pct < 110) return '#b8874a';
-  if (pct < 140) return '#e3b878';
-  return '#f7dcb0';
+  return _wpTier(pct).color;
 }
 
 // Five-step gold ramp. Untrained regions stay barely lit so the figure still
@@ -1559,22 +1573,48 @@ function renderWorkoutProgress() {
       : isStrength ? (x.e1rm ? `${Math.round(x.e1rm)} ${wtUnit()}` : '—')
       : `${x.sets} set${x.sets !== 1 ? 's' : ''}`;
     const sub = canRank
-      ? (x.e1rm ? `${Math.round(x.e1rm)} ${wtUnit()} · ${esc((x.best && x.best.name) || '')}` : '')
+      ? `${x.pct}% · ${Math.round(x.e1rm)} ${wtUnit()} ${esc((x.best && x.best.name) ? '· ' + x.best.name : '')}`
       : isStrength ? (x.best ? esc(x.best.name || '') : '')
       : (x.e1rm ? `best ${Math.round(x.e1rm)} ${wtUnit()}` : '');
+    const tierName = canRank
+      ? `<span class="wp-tier" style="color:${_wpTier(x.pct).color}">${_wpTier(x.pct).name}</span>`
+      : right;
     return `<div class="wp-mrow">
       <div class="wp-mname">${_WP_REGION_NAMES[x.r]}${sub ? `<span class="wp-msub">${sub}</span>` : ''}</div>
       <div class="wp-mbar"><div class="wp-mfill" style="width:${pctW}%"></div></div>
-      <div class="wp-mval">${right}</div>
+      <div class="wp-mval">${tierName}</div>
     </div>`;
   }).join('');
 
+  // Overall rank: the median group, so one freak lift or one neglected group
+  // doesn't decide the whole rating.
+  let overallHTML = '';
+  if (canRank && ranked.length) {
+    const pcts = ranked.map(x => x.pct).filter(p => p > 0).sort((a, b) => a - b);
+    const mid = pcts.length ? (pcts.length % 2
+      ? pcts[(pcts.length - 1) / 2]
+      : Math.round((pcts[pcts.length / 2 - 1] + pcts[pcts.length / 2]) / 2)) : 0;
+    const t = _wpTier(mid);
+    const top = ranked[0];
+    overallHTML = `
+      <div class="wp-overall">
+        <div>
+          <div class="wp-overall-lbl">Overall rank</div>
+          <div class="wp-overall-tier" style="color:${t.color}">${t.name}</div>
+        </div>
+        <div class="wp-overall-side">
+          <div class="wp-overall-lbl">Strongest</div>
+          <div class="wp-overall-sub">${_WP_REGION_NAMES[top.r]} · ${_wpTier(top.pct).name}</div>
+        </div>
+      </div>`;
+  }
+
   const strengthSub = canRank
-    ? 'Each group scored against an average lifter of your bodyweight — 100% is average.'
+    ? 'Each group ranked against an average lifter of your bodyweight — 100% is average.'
     : 'Best estimated 1RM per muscle group.';
   const strengthFoot = canRank
-    ? `Relative to a ${_wpSex() === 'female' ? 'female' : 'male'} lifter at ${Math.round(bodyWt)} ${wtUnit()}. Benchmarks are approximate, so read these as a guide to which groups lead and lag, not a precise ranking.`
-    : `<span style="color:var(--accent-b)">Log your bodyweight to compare against an average lifter.</span> Until then these are absolute loads, so big compound muscles rank highest.`;
+    ? `Ranks: ${_WP_TIERS.slice(1).map(t => t.name).join(' → ')}. Measured against a ${_wpSex() === 'female' ? 'female' : 'male'} lifter at ${Math.round(bodyWt)} ${wtUnit()}. Benchmarks are approximate, so treat these as a guide to which groups lead and lag.`
+    : `<span style="color:var(--accent-b)">Log your bodyweight to get ranked.</span> Until then these are absolute loads, so big compound muscles rank highest.`;
 
   const muscleHTML = `
     <div class="sec-lbl ani" style="padding:18px 24px 8px">MUSCLE MAP</div>
@@ -1586,17 +1626,20 @@ function renderWorkoutProgress() {
       <div class="wp-card-sub" style="margin-bottom:6px">${isStrength
         ? strengthSub
         : 'Working sets per muscle group over the last 7 days.'}</div>
+      ${overallHTML}
       ${_wpBodyMapSVG(mapVals, mapMax, heatFn)}
-      <div class="wp-legend">
-        <span>${canRank ? 'Below avg' : isStrength ? 'Weaker' : 'Untrained'}</span>
+      ${canRank ? `<div class="wp-tierbar">
+        ${_WP_TIERS.slice(1).map(t => `<div class="wp-tierseg"><i style="background:${t.color}"></i><span>${t.name}</span></div>`).join('')}
+      </div>` : `<div class="wp-legend">
+        <span>${isStrength ? 'Weaker' : 'Untrained'}</span>
         <i style="background:rgba(255,255,255,0.055)"></i>
         <i style="background:rgba(176,132,72,0.34)"></i>
         <i style="background:rgba(176,132,72,0.62)"></i>
         <i style="background:#b8874a"></i>
         <i style="background:#e3b878"></i>
         <i style="background:#f7dcb0"></i>
-        <span>${canRank ? 'Well above' : isStrength ? 'Strongest' : 'Most'}</span>
-      </div>
+        <span>${isStrength ? 'Strongest' : 'Most'}</span>
+      </div>`}
       ${ranked.length ? `<div class="wp-ranklist">${rankHTML}</div>` : ''}
       <div class="wp-card-foot">${isStrength
         ? strengthFoot

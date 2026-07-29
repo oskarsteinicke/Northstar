@@ -575,6 +575,27 @@ nav {
 }
 .wp-tbtn.active { background: rgba(176,132,72,0.18); color: var(--accent-b); }
 
+/* Strength ranks */
+.wp-overall {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 14px; margin-bottom: 10px;
+  background: var(--surface2); border: 1px solid var(--border2); border-radius: 14px;
+}
+.wp-overall-lbl { font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1.4px; }
+.wp-overall-tier { font-family: var(--display); font-size: 21px; font-weight: 700; letter-spacing: 0.3px; margin-top: 3px; }
+.wp-overall-side { text-align: right; }
+.wp-overall-sub { font-size: 12px; color: var(--text); margin-top: 5px; font-weight: 600; }
+.wp-tier { font-size: 11px; font-weight: 700; letter-spacing: 0.2px; white-space: nowrap; }
+
+.wp-tierbar { display: flex; gap: 3px; margin-top: 10px; }
+.wp-tierseg { flex: 1; min-width: 0; text-align: center; }
+.wp-tierseg i { display: block; height: 6px; border-radius: 2px; }
+.wp-tierseg span {
+  display: block; margin-top: 4px; font-size: 8px; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 .wp-legend { display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 8px; }
 .wp-legend i { width: 15px; height: 7px; border-radius: 2px; display: block; }
 .wp-legend span { font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; }
@@ -585,7 +606,7 @@ nav {
 .wp-mname { flex: 0 0 88px; font-size: 11.5px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wp-mbar { flex: 1; height: 7px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
 .wp-mfill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-b)); border-radius: 4px; }
-.wp-mval { flex: 0 0 54px; text-align: right; font-size: 11.5px; color: var(--text); font-weight: 600; white-space: nowrap; }
+.wp-mval { flex: 0 0 80px; text-align: right; font-size: 11.5px; color: var(--text); font-weight: 600; white-space: nowrap; }
 
 .wp-prow { display: flex; align-items: baseline; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border2); }
 .wp-prow:last-of-type { border-bottom: none; }
