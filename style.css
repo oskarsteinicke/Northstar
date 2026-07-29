@@ -516,6 +516,67 @@ nav {
 .w-finish:hover, .w-action-btn:hover { background: var(--surface2); border-color: var(--accent); }
 .w-finish:active, .w-action-btn:active { background: rgba(176,132,72,0.12); }
 
+/* Progress entry point — the one gold-lined button on the workout home */
+.w-progress-btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  border-color: rgba(217,180,106,0.34);
+  color: var(--accent-b);
+}
+.w-progress-btn .ic { stroke: var(--accent-b); }
+.w-stats-tap { cursor: pointer; border-radius: 14px; transition: background 0.18s; }
+.w-stats-tap:active { background: rgba(255,255,255,0.03); }
+
+/* ── PROGRESS VIEW ─────────────────────────────────────────────────── */
+.wp-summary {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  margin: 0 24px 4px; padding: 16px 12px;
+  background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius);
+}
+.wp-sum-item { text-align: center; }
+.wp-sum-val { font-family: var(--display); font-size: 24px; font-weight: 700; color: var(--accent-b); letter-spacing: 0.3px; }
+.wp-sum-lbl { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1.2px; margin-top: 3px; }
+.wp-delta { display: inline-block; margin-top: 6px; font-size: 10px; letter-spacing: 0.4px; color: var(--text-muted); }
+.wp-delta.wp-up { color: var(--carb); }
+.wp-delta.wp-down { color: var(--fat); }
+
+.wp-card {
+  background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius);
+  padding: 16px; margin: 0 24px;
+}
+.wp-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.wp-card-title { font-family: var(--display); font-size: 15px; font-weight: 600; color: var(--text); }
+.wp-card-sub { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+.wp-card-metric { text-align: right; flex-shrink: 0; }
+.wp-card-num { font-family: var(--display); font-size: 26px; font-weight: 700; color: var(--accent-b); line-height: 1; }
+.wp-card-unit { font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 3px; }
+.wp-card-foot { font-size: 11px; color: var(--text-dim); margin-top: 10px; }
+.wp-card-foot.wp-up { color: var(--carb); }
+.wp-card-foot.wp-down { color: var(--fat); }
+
+.wp-chips { display: flex; gap: 6px; overflow-x: auto; padding: 0 24px 10px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.wp-chips::-webkit-scrollbar { display: none; }
+.wp-chip {
+  flex: 0 0 auto; padding: 7px 13px; border-radius: 999px;
+  background: var(--surface2); border: 1px solid var(--border2);
+  color: var(--text-dim); font-size: 11.5px; font-weight: 500;
+  white-space: nowrap; cursor: pointer; transition: background 0.16s, color 0.16s, border-color 0.16s;
+}
+.wp-chip.active { background: rgba(176,132,72,0.16); border-color: rgba(217,180,106,0.38); color: var(--accent-b); }
+
+.wp-hint { margin: 0 24px; padding: 16px; background: var(--surface); border: 1px solid var(--border2); border-radius: var(--radius); font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+
+.wp-mrow { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+.wp-mname { flex: 0 0 78px; font-size: 11.5px; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wp-mbar { flex: 1; height: 7px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+.wp-mfill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-b)); border-radius: 4px; }
+.wp-mval { flex: 0 0 26px; text-align: right; font-size: 11.5px; color: var(--text); font-weight: 600; }
+
+.wp-prow { display: flex; align-items: baseline; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border2); }
+.wp-prow:last-of-type { border-bottom: none; }
+.wp-pname { flex: 1; font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wp-pval { font-size: 12px; color: var(--accent-b); font-weight: 600; white-space: nowrap; }
+.wp-pdate { flex: 0 0 auto; font-size: 10px; color: var(--text-muted); }
+
 .w-hist-item {
   padding: 14px 24px;
   border-bottom: 1px solid var(--border2);

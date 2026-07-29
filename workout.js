@@ -203,7 +203,8 @@ function renderWorkout() {
   document.getElementById('view').innerHTML = `
     <div class="page-head ani"><div class="page-title">Workout</div><div class="page-sub">Train with purpose. Build discipline.</div></div>
 
-    <div class="w-stats-strip ani">
+    <div class="w-stats-strip ani w-stats-tap" role="button" tabindex="0" aria-label="View progress"
+         onclick="go('workoutProgress')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();go('workoutProgress')}">
       <div class="w-stat-item"><div class="w-stat-val">${stats.thisWeek}</div><div class="w-stat-lbl">This week</div></div>
       <div class="w-stat-item"><div class="w-stat-val">${stats.totalSessions}</div><div class="w-stat-lbl">Total</div></div>
       <div class="w-stat-item"><div class="w-stat-val">${stats.totalVolume >= 1000 ? (stats.totalVolume/1000).toFixed(0)+'k' : stats.totalVolume}</div><div class="w-stat-lbl">Volume ${wtUnit()}</div></div>
@@ -225,6 +226,7 @@ function renderWorkout() {
       <div class="w-hero-cta ${workoutDoneToday() ? 'done' : ''}">${workoutDoneToday() ? '✓ Workout logged today' : '→ Start today\'s workout'}</div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 24px 8px">
+      <button class="w-action-btn w-progress-btn" style="margin:0;width:100%;grid-column:1/-1" onclick="go('workoutProgress')">${typeof icon === 'function' ? icon('trend', 16) : ''} Progress</button>
       <button class="w-action-btn" style="margin:0;width:100%" onclick="go('workoutPicker')">Programs</button>
       <button class="w-action-btn" style="margin:0;width:100%" onclick="go('workoutHistory')">History</button>
       <button class="w-action-btn" style="margin:0;width:100%" onclick="initBuilder();go('workoutBuilder')">+ Create</button>
@@ -1076,6 +1078,304 @@ function renderPRHistory() {
     <button class="back" onclick="go('workoutHistory')"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg> Back</button>
     <div class="page-head ani"><div class="page-title">Personal Records</div><div class="page-sub">Your all-time bests per exercise.</div></div>
     <div class="ani">${rows}</div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// RENDER: PROGRESS — strength, volume and consistency over time
+// ══════════════════════════════════════════════════════════════════════════
+let _wpEx = null; // exercise key selected for the strength chart
+
+// Epley estimated 1RM. Lets 5×100 compare fairly against 8×85, so the trend
+// tracks real strength instead of whatever rep range you happened to use.
+function _e1rm(weight, reps) {
+  if (!weight || !reps) return 0;
+  return reps === 1 ? weight : weight * (1 + reps / 30);
+}
+
+// Exercise ids are strings (built-in) or numbers (wger), keyed as strings here
+function _wpLookup(key) {
+  return lookupExercise(key) || (/^\d+$/.test(key) ? lookupExercise(parseInt(key, 10)) : null);
+}
+
+function _wpName(key) {
+  const ex = _wpLookup(key);
+  return ex ? ex.name : ((prs[key] && prs[key].name) || 'Exercise');
+}
+
+function _wpTrainedDates() {
+  return Object.keys(workoutLog).filter(d => trainedOnDay(d)).sort();
+}
+
+function _wpDayVolume(d) {
+  const wl = workoutLog[d];
+  if (!wl || !wl.exercises) return 0;
+  return wl.exercises.reduce((sum, e) => sum + (e.sets || [])
+    .filter(s => s.completed && !s.warmup)
+    .reduce((a, s) => a + (s.weight || 0) * (s.reps || 0), 0), 0);
+}
+
+// Best estimated 1RM per session for one exercise, oldest first
+function _wpSeries(key) {
+  const out = [];
+  _wpTrainedDates().forEach(d => {
+    const we = (workoutLog[d].exercises || []).find(e => String(e.exerciseId) === key);
+    if (!we) return;
+    const sets = (we.sets || []).filter(s => s.completed && !s.warmup && s.reps > 0 && s.weight > 0);
+    if (!sets.length) return;
+    let best = 0, bw = 0, br = 0;
+    sets.forEach(s => {
+      const e = _e1rm(s.weight, s.reps);
+      if (e > best) { best = e; bw = s.weight; br = s.reps; }
+    });
+    out.push({ date: d, e1rm: best, weight: bw, reps: br });
+  });
+  return out;
+}
+
+// Exercises worth charting: logged with weight on 2+ days, most frequent first
+function _wpTracked() {
+  const counts = {};
+  _wpTrainedDates().forEach(d => {
+    (workoutLog[d].exercises || []).forEach(we => {
+      if (!(we.sets || []).some(s => s.completed && !s.warmup && s.reps > 0 && s.weight > 0)) return;
+      const k = String(we.exerciseId);
+      counts[k] = (counts[k] || 0) + 1;
+    });
+  });
+  return Object.entries(counts).filter(([, n]) => n >= 2)
+    .sort((a, b) => b[1] - a[1]).slice(0, 10).map(([k]) => k);
+}
+
+// Volume + sessions for each of the last N calendar weeks, oldest first
+function _wpWeekly(weeks) {
+  const out = [];
+  for (let i = weeks - 1; i >= 0; i--) {
+    const end = new Date(); end.setDate(end.getDate() - i * 7);
+    const start = new Date(end); start.setDate(start.getDate() - 6);
+    const sKey = start.toLocaleDateString('en-CA'), eKey = end.toLocaleDateString('en-CA');
+    let vol = 0, sessions = 0;
+    _wpTrainedDates().forEach(d => {
+      if (d < sKey || d > eKey) return;
+      sessions++; vol += _wpDayVolume(d);
+    });
+    out.push({ vol, sessions, label: end.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' }) });
+  }
+  return out;
+}
+
+// This calendar month vs last, for the headline deltas
+function _wpMonths() {
+  const now = new Date();
+  const key = (y, m) => new Date(y, m, 1).toLocaleDateString('en-CA');
+  const thisStart = key(now.getFullYear(), now.getMonth());
+  const lastStart = key(now.getFullYear(), now.getMonth() - 1);
+  const nextStart = key(now.getFullYear(), now.getMonth() + 1);
+  const agg = (from, to) => {
+    let sessions = 0, vol = 0;
+    _wpTrainedDates().forEach(d => {
+      if (d < from || d >= to) return;
+      sessions++; vol += _wpDayVolume(d);
+    });
+    return { sessions, vol };
+  };
+  const prCount = Object.values(prs).filter(p => p && p.date >= thisStart).length;
+  return { cur: agg(thisStart, nextStart), prev: agg(lastStart, thisStart), prCount };
+}
+
+// Completed working sets per muscle group over the last N days
+function _wpMuscles(days) {
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
+  const cKey = cutoff.toLocaleDateString('en-CA');
+  const out = {};
+  _wpTrainedDates().filter(d => d >= cKey).forEach(d => {
+    (workoutLog[d].exercises || []).forEach(we => {
+      const n = (we.sets || []).filter(s => s.completed && !s.warmup).length;
+      if (!n) return;
+      const ex = _wpLookup(String(we.exerciseId));
+      const m = (ex && ex.muscle) ? ex.muscle : 'Other';
+      out[m] = (out[m] || 0) + n;
+    });
+  });
+  return Object.entries(out).sort((a, b) => b[1] - a[1]);
+}
+
+function _wpFmtVol(v) {
+  return v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + 'k' : String(Math.round(v));
+}
+
+// Signed delta chip. up=true means higher is better (all metrics here).
+function _wpDelta(cur, prev, unit) {
+  if (!prev) return cur ? '<span class="wp-delta wp-up">new</span>' : '';
+  const diff = cur - prev;
+  if (!diff) return '<span class="wp-delta">even</span>';
+  const pct = Math.round((diff / prev) * 100);
+  const cls = diff > 0 ? 'wp-up' : 'wp-down';
+  const sign = diff > 0 ? '+' : '−';
+  const val = unit === '%' ? `${Math.abs(pct)}%` : `${sign}${_wpFmtVol(Math.abs(diff))}`;
+  return `<span class="wp-delta ${cls}">${diff > 0 ? '▲' : '▼'} ${unit === '%' ? sign + val : val}</span>`;
+}
+
+// Line chart of estimated 1RM across sessions
+function _wpLineChart(series) {
+  const W = 320, H = 132, padL = 30, padR = 12, padT = 14, padB = 22;
+  const vals = series.map(s => s.e1rm);
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const span = (max - min) || Math.max(1, max * 0.1);
+  const lo = min - span * 0.2, hi = max + span * 0.2;
+  const x = i => padL + (series.length === 1 ? (W - padL - padR) / 2 : (i / (series.length - 1)) * (W - padL - padR));
+  const y = v => padT + (1 - (v - lo) / (hi - lo)) * (H - padT - padB);
+  const pts = series.map((s, i) => `${x(i).toFixed(1)},${y(s.e1rm).toFixed(1)}`);
+  const line = `M${pts.join(' L')}`;
+  const area = `${line} L${x(series.length - 1).toFixed(1)},${H - padB} L${x(0).toFixed(1)},${H - padB} Z`;
+  const dots = series.map((s, i) => {
+    const last = i === series.length - 1;
+    return `<circle cx="${x(i).toFixed(1)}" cy="${y(s.e1rm).toFixed(1)}" r="${last ? 4 : 2.5}"
+      fill="${last ? 'var(--accent-b)' : 'var(--accent)'}"/>`;
+  }).join('');
+  const yLbl = [max, min].map(v =>
+    `<text x="${padL - 6}" y="${(y(v) + 3).toFixed(1)}" fill="var(--text-muted)" font-size="9" text-anchor="end">${Math.round(v)}</text>`
+  ).join('');
+  const xLbl = `<text x="${x(0).toFixed(1)}" y="${H - 6}" fill="var(--text-muted)" font-size="9" text-anchor="start">${fmtDate(series[0].date)}</text>
+    <text x="${x(series.length - 1).toFixed(1)}" y="${H - 6}" fill="var(--text-muted)" font-size="9" text-anchor="end">${fmtDate(series[series.length - 1].date)}</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;display:block" role="img" aria-label="Estimated 1RM over time">
+    <defs><linearGradient id="wpg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="var(--accent-b)" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="var(--accent-b)" stop-opacity="0"/>
+    </linearGradient></defs>
+    <line x1="${padL}" y1="${H - padB}" x2="${W - padR}" y2="${H - padB}" stroke="var(--border2)" stroke-width="1"/>
+    <path d="${area}" fill="url(#wpg)"/>
+    <path d="${line}" fill="none" stroke="var(--accent-b)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}${yLbl}${xLbl}
+  </svg>`;
+}
+
+function renderWorkoutProgress() {
+  const trained = _wpTrainedDates();
+
+  if (!trained.length) {
+    document.getElementById('view').innerHTML = `
+      <button class="back" onclick="go('workout')"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg> Back</button>
+      <div class="page-head ani"><div class="page-title">Progress</div><div class="page-sub">Your strength over time.</div></div>
+      <div class="empty-state" style="padding:32px 24px">
+        <div class="empty-state-icon">📈</div>
+        <div class="empty-state-title">No training logged yet</div>
+        <div class="empty-state-sub">Finish a workout and your strength, volume and consistency will start showing up here.</div>
+        <button class="empty-state-btn" onclick="go('workoutActive')">Start Workout</button>
+      </div>`;
+    return;
+  }
+
+  // ── Headline: this month vs last ──
+  const m = _wpMonths();
+  const summaryHTML = `
+    <div class="wp-summary ani">
+      <div class="wp-sum-item">
+        <div class="wp-sum-val">${m.cur.sessions}</div>
+        <div class="wp-sum-lbl">Sessions</div>
+        ${_wpDelta(m.cur.sessions, m.prev.sessions)}
+      </div>
+      <div class="wp-sum-item">
+        <div class="wp-sum-val">${_wpFmtVol(m.cur.vol)}</div>
+        <div class="wp-sum-lbl">Volume ${wtUnit()}</div>
+        ${_wpDelta(m.cur.vol, m.prev.vol, '%')}
+      </div>
+      <div class="wp-sum-item">
+        <div class="wp-sum-val">${m.prCount}</div>
+        <div class="wp-sum-lbl">PRs</div>
+        <span class="wp-delta">this month</span>
+      </div>
+    </div>`;
+
+  // ── Strength by exercise ──
+  const tracked = _wpTracked();
+  let strengthHTML = '';
+  if (!tracked.length) {
+    strengthHTML = `<div class="wp-hint ani">Log the same exercise on two different days and its strength curve appears here.</div>`;
+  } else {
+    if (!_wpEx || !tracked.includes(_wpEx)) _wpEx = tracked[0];
+    const chips = tracked.map(k =>
+      `<button class="wp-chip${k === _wpEx ? ' active' : ''}" onclick="_wpEx='${k.replace(/'/g, "\\'")}';renderWorkoutProgress()">${esc(_wpName(k))}</button>`
+    ).join('');
+    const series = _wpSeries(_wpEx);
+    const first = series[0], last = series[series.length - 1];
+    const gain = last.e1rm - first.e1rm;
+    const pct = first.e1rm ? Math.round((gain / first.e1rm) * 100) : 0;
+    const gainCls = gain > 0 ? 'wp-up' : gain < 0 ? 'wp-down' : '';
+    const gainTxt = series.length < 2 ? 'One session so far'
+      : `${gain > 0 ? '▲ +' : gain < 0 ? '▼ −' : ''}${gain ? Math.abs(Math.round(gain)) + ' ' + wtUnit() : 'No change'}${gain && pct ? ` (${gain > 0 ? '+' : '−'}${Math.abs(pct)}%)` : ''}`;
+    strengthHTML = `
+      <div class="sec-lbl ani" style="padding:18px 24px 8px">STRENGTH BY EXERCISE</div>
+      <div class="wp-chips ani">${chips}</div>
+      <div class="wp-card ani">
+        <div class="wp-card-head">
+          <div>
+            <div class="wp-card-title">${esc(_wpName(_wpEx))}</div>
+            <div class="wp-card-sub">${series.length} session${series.length !== 1 ? 's' : ''} · best ${last.weight} ${wtUnit()} × ${last.reps}</div>
+          </div>
+          <div class="wp-card-metric">
+            <div class="wp-card-num">${Math.round(last.e1rm)}</div>
+            <div class="wp-card-unit">est. 1RM ${wtUnit()}</div>
+          </div>
+        </div>
+        ${series.length >= 2 ? _wpLineChart(series) : ''}
+        <div class="wp-card-foot ${gainCls}">${gainTxt}${series.length >= 2 ? ` since ${fmtDate(first.date)}` : ''}</div>
+      </div>`;
+  }
+
+  // ── 12-week volume ──
+  const weeks = _wpWeekly(12);
+  const maxW = Math.max(...weeks.map(w => w.vol), 1);
+  const activeWeeks = weeks.filter(w => w.sessions > 0).length;
+  const bw = 18, bgap = 6, cW = weeks.length * (bw + bgap) - bgap, cH = 92;
+  const wBars = weeks.map((w, i) => {
+    const h = w.vol ? Math.max(3, (w.vol / maxW) * (cH - 22)) : 2;
+    const x = i * (bw + bgap), y = cH - 16 - h;
+    const isLast = i === weeks.length - 1;
+    return `<rect x="${x}" y="${y.toFixed(1)}" width="${bw}" height="${h.toFixed(1)}" rx="3"
+      fill="${w.vol ? (isLast ? 'var(--accent-b)' : 'var(--accent)') : 'var(--border)'}"/>
+      ${i % 3 === 0 || isLast ? `<text x="${x + bw / 2}" y="${cH - 3}" fill="var(--text-muted)" font-size="8" text-anchor="middle">${w.label}</text>` : ''}`;
+  }).join('');
+  const volumeHTML = `
+    <div class="sec-lbl ani" style="padding:18px 24px 8px">VOLUME · LAST 12 WEEKS</div>
+    <div class="wp-card ani">
+      <svg viewBox="0 0 ${cW} ${cH}" style="width:100%;display:block" role="img" aria-label="Weekly training volume">${wBars}</svg>
+      <div class="wp-card-foot">Trained in ${activeWeeks} of the last 12 weeks · ${_wpFmtVol(weeks.reduce((s, w) => s + w.vol, 0))} ${wtUnit()} total</div>
+    </div>`;
+
+  // ── Muscle balance ──
+  const muscles = _wpMuscles(30);
+  const maxM = Math.max(...muscles.map(x => x[1]), 1);
+  const muscleHTML = muscles.length ? `
+    <div class="sec-lbl ani" style="padding:18px 24px 8px">MUSCLE BALANCE · LAST 30 DAYS</div>
+    <div class="wp-card ani">
+      ${muscles.map(([name, n]) => `
+        <div class="wp-mrow">
+          <div class="wp-mname">${esc(name)}</div>
+          <div class="wp-mbar"><div class="wp-mfill" style="width:${Math.round((n / maxM) * 100)}%"></div></div>
+          <div class="wp-mval">${n}</div>
+        </div>`).join('')}
+      <div class="wp-card-foot">Completed working sets per muscle group.</div>
+    </div>` : '';
+
+  // ── Recent PRs ──
+  const recentPRs = Object.entries(prs).sort((a, b) => (b[1].date || '').localeCompare(a[1].date || '')).slice(0, 5);
+  const prHTML = recentPRs.length ? `
+    <div class="sec-lbl ani" style="padding:18px 24px 8px">RECENT PERSONAL RECORDS</div>
+    <div class="wp-card ani">
+      ${recentPRs.map(([eid, pr]) => `
+        <div class="wp-prow">
+          <div class="wp-pname">${esc(_wpName(String(eid)))}</div>
+          <div class="wp-pval">${pr.weight} ${wtUnit()} × ${pr.reps}</div>
+          <div class="wp-pdate">${fmtDate(pr.date)}</div>
+        </div>`).join('')}
+      <button class="w-action-btn" style="margin:12px 0 0;width:100%" onclick="go('prHistory')">All personal records</button>
+    </div>` : '';
+
+  document.getElementById('view').innerHTML = `
+    <button class="back" onclick="go('workout')"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg> Back</button>
+    <div class="page-head ani"><div class="page-title">Progress</div><div class="page-sub">Your strength over time.</div></div>
+    ${summaryHTML}${strengthHTML}${volumeHTML}${muscleHTML}${prHTML}
+    <div style="height:12px"></div>`;
 }
 
 // ══════════════════════════════════════════════════════════════════════════
