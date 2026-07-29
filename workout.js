@@ -1084,6 +1084,7 @@ function renderPRHistory() {
 // RENDER: PROGRESS — strength, volume and consistency over time
 // ══════════════════════════════════════════════════════════════════════════
 let _wpEx = null; // exercise key selected for the strength chart
+let _wpMode = 'volume'; // body map mode: 'volume' (sets trained) | 'strength'
 
 // Epley estimated 1RM. Lets 5×100 compare fairly against 8×85, so the trend
 // tracks real strength instead of whatever rep range you happened to use.
@@ -1182,8 +1183,55 @@ function _wpMonths() {
   return { cur: agg(thisStart, nextStart), prev: agg(lastStart, thisStart), prCount };
 }
 
-// Completed working sets per muscle group over the last N days
-function _wpMuscles(days) {
+function _wpFmtVol(v) {
+  return v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + 'k' : String(Math.round(v));
+}
+
+// ── Body map ───────────────────────────────────────────────────────────────
+// Exercise muscle labels are free text and often compound ("Quads/Glutes",
+// "Chest/Tri"), so each label is split and every token credited to the
+// regions it covers.
+const _WP_REGION_NAMES = {
+  chest:'Chest', shoulders:'Shoulders', biceps:'Biceps', triceps:'Triceps',
+  forearms:'Forearms', abs:'Abs', obliques:'Obliques', lats:'Lats', traps:'Traps',
+  upperback:'Upper Back', lowerback:'Lower Back', glutes:'Glutes', quads:'Quads',
+  hamstrings:'Hamstrings', calves:'Calves', adductors:'Adductors',
+};
+const _WP_TOKENS = {
+  'chest':['chest'], 'upper chest':['chest'], 'lower chest':['chest'], 'inner chest':['chest'],
+  'tri':['triceps'], 'triceps':['triceps'],
+  'bi':['biceps'], 'biceps':['biceps'], 'brachialis':['biceps'],
+  'forearm':['forearms'], 'forearms':['forearms'],
+  'shoulders':['shoulders'], 'delts':['shoulders'], 'front delts':['shoulders'],
+  'side delts':['shoulders'], 'rear delts':['shoulders'],
+  'traps':['traps'],
+  'lats':['lats'], 'back':['lats','upperback'], 'upper back':['upperback'],
+  'lower back':['lowerback'], 'posterior chain':['lowerback','glutes','hamstrings'],
+  'abs':['abs'], 'core':['abs'], 'obliques':['obliques'],
+  'quads':['quads'], 'glutes':['glutes'], 'hams':['hamstrings'], 'hamstrings':['hamstrings'],
+  'calves':['calves'], 'adductors':['adductors'], 'abductors':['glutes'],
+  'legs':['quads','hamstrings','glutes'], 'arms':['biceps','triceps'],
+  'full body':['chest','lats','shoulders','abs','quads','glutes'],
+  'cardio':[], 'explosive':[], 'balance':[], 'unknown':[], 'other':[],
+};
+
+function _wpRegionsFor(label) {
+  if (!label) return [];
+  const out = new Set();
+  String(label).toLowerCase().split(/[\/,&+]|\sand\s/).forEach(raw => {
+    const t = raw.trim();
+    if (!t) return;
+    if (_WP_TOKENS[t]) { _WP_TOKENS[t].forEach(r => out.add(r)); return; }
+    // Unseen label (e.g. a wger category) — fall back to substring matching
+    Object.keys(_WP_TOKENS).forEach(k => {
+      if (k.length > 2 && t.includes(k)) _WP_TOKENS[k].forEach(r => out.add(r));
+    });
+  });
+  return [...out];
+}
+
+// Completed working sets per region over the last N days
+function _wpRegionSets(days) {
   const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
   const cKey = cutoff.toLocaleDateString('en-CA');
   const out = {};
@@ -1192,15 +1240,118 @@ function _wpMuscles(days) {
       const n = (we.sets || []).filter(s => s.completed && !s.warmup).length;
       if (!n) return;
       const ex = _wpLookup(String(we.exerciseId));
-      const m = (ex && ex.muscle) ? ex.muscle : 'Other';
-      out[m] = (out[m] || 0) + n;
+      _wpRegionsFor(ex && ex.muscle).forEach(r => { out[r] = (out[r] || 0) + n; });
     });
   });
-  return Object.entries(out).sort((a, b) => b[1] - a[1]);
+  return out;
 }
 
-function _wpFmtVol(v) {
-  return v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + 'k' : String(Math.round(v));
+// Best estimated 1RM seen for each region, all time
+function _wpRegionStrength() {
+  const out = {};
+  _wpTrainedDates().forEach(d => {
+    (workoutLog[d].exercises || []).forEach(we => {
+      const sets = (we.sets || []).filter(s => s.completed && !s.warmup && s.weight > 0 && s.reps > 0);
+      if (!sets.length) return;
+      const ex = _wpLookup(String(we.exerciseId));
+      const regions = _wpRegionsFor(ex && ex.muscle);
+      if (!regions.length) return;
+      let best = 0, bw = 0, br = 0;
+      sets.forEach(s => { const e = _e1rm(s.weight, s.reps); if (e > best) { best = e; bw = s.weight; br = s.reps; } });
+      regions.forEach(r => {
+        if (!out[r] || best > out[r].e1rm) out[r] = { e1rm: best, weight: bw, reps: br, name: ex ? ex.name : '', date: d };
+      });
+    });
+  });
+  return out;
+}
+
+// Five-step gold ramp. Untrained regions stay barely lit so the figure still
+// reads as a body.
+function _wpHeat(v, max) {
+  if (!v) return 'rgba(255,255,255,0.055)';
+  const t = Math.min(1, v / (max || 1));
+  if (t <= 0.2) return 'rgba(176,132,72,0.34)';
+  if (t <= 0.45) return 'rgba(176,132,72,0.62)';
+  if (t <= 0.7) return '#b8874a';
+  if (t <= 0.9) return '#e3b878';
+  return '#f7dcb0';
+}
+
+// Stylised front/back figures. `sym` shapes are drawn once and mirrored about
+// the figure's centre line; `mid` shapes sit on the centre line.
+// A dark silhouette is drawn first so untrained gaps (joints, hips, hands)
+// read as body rather than holes; muscle shapes sit on top of it.
+const _WP_SILHOUETTE = [
+  'M60,4 a12,13 0 1,0 0.1,0 Z',                       // head
+  'M54,25 L66,25 L66,42 L54,42 Z',                    // neck
+  'M45,43 L75,43 Q80,58 79,80 L77,119 L43,119 Q40,80 41,58 Z', // torso
+  'M43,117 L77,117 L79,133 L41,133 Z',                // pelvis
+  'M46,44 Q33,47 31,60 Q32,70 41,70 Q46,58 48,47 Z',  // shoulder cap L
+  'M74,44 Q87,47 89,60 Q88,70 79,70 Q74,58 72,47 Z',  // shoulder cap R
+  'M31,67 L43,67 L40,126 L28,124 Z',                  // arm L (biceps + forearm)
+  'M89,67 L77,67 L80,126 L92,124 Z',                  // arm R
+  'M28,123 Q25,133 31,138 Q38,137 40,130 L40,125 Z',  // hand L
+  'M92,123 Q95,133 89,138 Q82,137 80,130 L80,125 Z',  // hand R
+  'M43,131 L59,131 L57,190 L56,247 L46,247 L45,190 Z', // leg L
+  'M77,131 L61,131 L63,190 L64,247 L74,247 L75,190 Z', // leg R
+];
+
+const _WP_BODY = {
+  front: {
+    muscles: {
+      traps:     { sym: 'M55,40 L46,47 L53,50 L57,42 Z' },
+      shoulders: { sym: 'M46,46 Q34,48 32,59 Q33,69 41,69 Q46,58 48,48 Z' },
+      chest:     { sym: 'M58,46 L48,49 Q42,56 44,68 Q51,73 58,70 Z' },
+      biceps:    { sym: 'M33,70 Q29,82 31,94 Q36,98 41,93 Q43,82 41,70 Z' },
+      forearms:  { sym: 'M31,95 Q27,109 29,124 Q34,128 39,123 Q41,109 39,95 Z' },
+      abs:       { mid: 'M52,75 L68,75 L68,111 Q60,118 52,111 Z' },
+      obliques:  { sym: 'M46,76 Q43,91 46,109 L51,112 L51,75 Z' },
+      quads:     { sym: 'M44,134 Q41,156 46,180 L55,180 Q56,156 55,134 Z' },
+      adductors: { sym: 'M55,136 Q53,152 56,172 L59,172 L59,136 Z' },
+      calves:    { sym: 'M47,187 Q44,205 48,226 L55,226 Q56,205 55,187 Z' },
+    },
+  },
+  back: {
+    muscles: {
+      traps:     { mid: 'M60,43 L50,49 L54,70 L60,74 L66,70 L70,49 Z' },
+      shoulders: { sym: 'M46,46 Q34,48 32,59 Q33,69 41,69 Q46,58 48,48 Z' },
+      lats:      { sym: 'M49,66 Q41,82 47,101 L58,97 L58,78 L51,74 Z' },
+      upperback: { sym: 'M52,63 L59,66 L59,77 L50,73 Z' },
+      lowerback: { mid: 'M53,95 L67,95 L69,116 L51,116 Z' },
+      triceps:   { sym: 'M33,70 Q29,82 31,94 Q36,98 41,93 Q43,82 41,70 Z' },
+      forearms:  { sym: 'M31,95 Q27,109 29,124 Q34,128 39,123 Q41,109 39,95 Z' },
+      glutes:    { sym: 'M45,122 Q42,138 50,148 L58,148 L58,122 Z' },
+      hamstrings:{ sym: 'M46,150 Q43,166 47,181 L56,181 Q57,164 56,150 Z' },
+      calves:    { sym: 'M47,188 Q44,206 48,226 L55,226 Q56,205 55,188 Z' },
+    },
+  },
+};
+
+// One figure. `vals` is region -> number; regions with no shape are ignored.
+function _wpFigure(side, vals, max, xOff) {
+  const spec = _WP_BODY[side];
+  const statics = _WP_SILHOUETTE.map(d =>
+    `<path d="${d}" fill="rgba(255,255,255,0.05)"/>`).join('');
+  const muscles = Object.entries(spec.muscles).map(([region, shape]) => {
+    const v = vals[region] || 0;
+    const fill = _wpHeat(v, max);
+    const title = `<title>${_WP_REGION_NAMES[region]}: ${v}</title>`;
+    const stroke = 'stroke="rgba(0,0,0,0.55)" stroke-width="0.8"';
+    if (shape.mid) return `<path d="${shape.mid}" fill="${fill}" ${stroke}>${title}</path>`;
+    return `<g>${title}<path d="${shape.sym}" fill="${fill}" ${stroke}/>` +
+           `<path d="${shape.sym}" fill="${fill}" ${stroke} transform="translate(120,0) scale(-1,1)"/></g>`;
+  }).join('');
+  return `<g transform="translate(${xOff},0)">${statics}${muscles}
+    <text x="60" y="262" fill="var(--text-muted)" font-size="9" text-anchor="middle">${side === 'front' ? 'FRONT' : 'BACK'}</text>
+  </g>`;
+}
+
+function _wpBodyMapSVG(vals, max) {
+  return `<svg viewBox="0 0 256 268" style="width:100%;display:block" role="img"
+    aria-label="Muscle map coloured by training">
+    ${_wpFigure('front', vals, max, 4)}${_wpFigure('back', vals, max, 132)}
+  </svg>`;
 }
 
 // Signed delta chip. up=true means higher is better (all metrics here).
@@ -1342,20 +1493,68 @@ function renderWorkoutProgress() {
       <div class="wp-card-foot">Trained in ${activeWeeks} of the last 12 weeks · ${_wpFmtVol(weeks.reduce((s, w) => s + w.vol, 0))} ${wtUnit()} total</div>
     </div>`;
 
-  // ── Muscle balance ──
-  const muscles = _wpMuscles(30);
-  const maxM = Math.max(...muscles.map(x => x[1]), 1);
-  const muscleHTML = muscles.length ? `
-    <div class="sec-lbl ani" style="padding:18px 24px 8px">MUSCLE BALANCE · LAST 30 DAYS</div>
+  // ── Body map: what you've trained lately, and where you're strongest ──
+  const setsByRegion = _wpRegionSets(7);
+  const strByRegion = _wpRegionStrength();
+  const isStrength = _wpMode === 'strength';
+
+  const mapVals = {};
+  if (isStrength) Object.keys(strByRegion).forEach(r => { mapVals[r] = strByRegion[r].e1rm; });
+  else Object.assign(mapVals, setsByRegion);
+  const mapMax = Math.max(...Object.values(mapVals), 1);
+
+  // Ranked list under the map, sorted by whichever mode is showing
+  const ranked = Object.keys(_WP_REGION_NAMES)
+    .map(r => ({
+      r, sets: setsByRegion[r] || 0,
+      e1rm: strByRegion[r] ? strByRegion[r].e1rm : 0,
+      best: strByRegion[r] || null,
+    }))
+    .filter(x => x.sets > 0 || x.e1rm > 0)
+    .sort((a, b) => isStrength ? b.e1rm - a.e1rm : (b.sets - a.sets) || (b.e1rm - a.e1rm));
+
+  const rankHTML = ranked.map(x => {
+    const v = isStrength ? x.e1rm : x.sets;
+    const pctW = Math.round((v / mapMax) * 100);
+    const right = isStrength
+      ? (x.e1rm ? `${Math.round(x.e1rm)} ${wtUnit()}` : '—')
+      : `${x.sets} set${x.sets !== 1 ? 's' : ''}`;
+    const sub = isStrength
+      ? (x.best ? esc(x.best.name || '') : '')
+      : (x.e1rm ? `best ${Math.round(x.e1rm)} ${wtUnit()}` : '');
+    return `<div class="wp-mrow">
+      <div class="wp-mname">${_WP_REGION_NAMES[x.r]}${sub ? `<span class="wp-msub">${sub}</span>` : ''}</div>
+      <div class="wp-mbar"><div class="wp-mfill" style="width:${pctW}%"></div></div>
+      <div class="wp-mval">${right}</div>
+    </div>`;
+  }).join('');
+
+  const muscleHTML = `
+    <div class="sec-lbl ani" style="padding:18px 24px 8px">MUSCLE MAP</div>
+    <div class="wp-toggle ani">
+      <button class="wp-tbtn${!isStrength ? ' active' : ''}" onclick="_wpMode='volume';renderWorkoutProgress()">Trained · 7 days</button>
+      <button class="wp-tbtn${isStrength ? ' active' : ''}" onclick="_wpMode='strength';renderWorkoutProgress()">Strength</button>
+    </div>
     <div class="wp-card ani">
-      ${muscles.map(([name, n]) => `
-        <div class="wp-mrow">
-          <div class="wp-mname">${esc(name)}</div>
-          <div class="wp-mbar"><div class="wp-mfill" style="width:${Math.round((n / maxM) * 100)}%"></div></div>
-          <div class="wp-mval">${n}</div>
-        </div>`).join('')}
-      <div class="wp-card-foot">Completed working sets per muscle group.</div>
-    </div>` : '';
+      <div class="wp-card-sub" style="margin-bottom:6px">${isStrength
+        ? 'Best estimated 1RM reached for each muscle group.'
+        : 'Working sets per muscle group over the last 7 days.'}</div>
+      ${_wpBodyMapSVG(mapVals, mapMax)}
+      <div class="wp-legend">
+        <span>${isStrength ? 'Weaker' : 'Untrained'}</span>
+        <i style="background:rgba(255,255,255,0.055)"></i>
+        <i style="background:rgba(176,132,72,0.34)"></i>
+        <i style="background:rgba(176,132,72,0.62)"></i>
+        <i style="background:#b8874a"></i>
+        <i style="background:#e3b878"></i>
+        <i style="background:#f7dcb0"></i>
+        <span>${isStrength ? 'Strongest' : 'Most'}</span>
+      </div>
+      ${ranked.length ? `<div class="wp-ranklist">${rankHTML}</div>` : ''}
+      <div class="wp-card-foot">${isStrength
+        ? 'Absolute loads, so big compound muscles naturally rank highest. Compare a group against itself over time rather than against the others.'
+        : ranked.length ? `${ranked.filter(x => x.sets > 0).length} muscle groups trained this week.` : 'No sets logged in the last 7 days.'}</div>
+    </div>`;
 
   // ── Recent PRs ──
   const recentPRs = Object.entries(prs).sort((a, b) => (b[1].date || '').localeCompare(a[1].date || '')).slice(0, 5);
