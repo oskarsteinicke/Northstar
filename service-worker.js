@@ -1,4 +1,4 @@
-const CACHE = 'arete-v101';
+const CACHE = 'arete-v102';
 const ASSETS = [
   '/',
   '/index.html',
@@ -14,6 +14,7 @@ const ASSETS = [
   '/bodymap.js',
   '/integrations.js',
   '/profile.js',
+  '/privacy.html',
   '/manifest.json',
   '/avatar-1.png',
   '/avatar-2.png',

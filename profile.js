@@ -1423,14 +1423,25 @@ function renderStats() {
           <button class="unit-btn${settings.sounds===false?' unit-btn-active':''}" onclick="settings.sounds=false;LS.set('hvi_settings',settings);renderStats()">Off</button>
         </div>
       </div>
-      ${'Notification' in window ? `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-        <div style="font-size:14px;color:var(--text)">Reminders</div>
-        <div class="unit-toggle">
-          ${Notification.permission === 'granted'
-            ? `<button class="unit-btn unit-btn-active">On</button><button class="unit-btn" onclick="settings.notifications=false;LS.set('hvi_settings',settings);renderStats()">Off</button>`
-            : `<button class="unit-btn" onclick="requestNotifications()">Enable</button>`}
+      ${(() => {
+        const native = typeof _nativeNotifier === 'function' && !!_nativeNotifier();
+        if (!native && !('Notification' in window)) return '';
+        const webGranted = !native && Notification.permission === 'granted';
+        // The toggle reflects the setting, not the browser permission — it used
+        // to read permission, so switching Off never appeared to stick.
+        const on = !!settings.notifications && (native || webGranted);
+        const needsPerm = !native && !webGranted;
+        return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${native ? 14 : 4}px">
+          <div style="font-size:14px;color:var(--text)">Reminders</div>
+          <div class="unit-toggle">
+            ${needsPerm
+              ? `<button class="unit-btn" onclick="requestNotifications()">Enable</button>`
+              : `<button class="unit-btn${on ? ' unit-btn-active' : ''}" onclick="setNotifications(true)">On</button>
+                 <button class="unit-btn${!on ? ' unit-btn-active' : ''}" onclick="setNotifications(false)">Off</button>`}
+          </div>
         </div>
-      </div>` : ''}
+        ${native ? '' : `<div style="font-size:10.5px;color:var(--text-muted);line-height:1.45;margin-bottom:14px">Browser reminders only fire while Arete is open. Install the app to your home screen for reminders that reach you in the background.</div>`}`;
+      })()}
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
         <div style="font-size:14px;color:var(--text)">App version</div>
         <button class="unit-btn" style="padding:6px 14px;background:var(--surface);border:1px solid var(--border2)" onclick="if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(r=>r.forEach(x=>x.unregister())).then(()=>window.location.reload(true))}else{window.location.reload(true)}">Refresh</button>
@@ -1482,6 +1493,7 @@ function renderStats() {
     <button class="w-action-btn" style="margin:0 24px 8px" onclick="go('challenges')">${icon('swords')} Challenge a Friend</button>
     <button class="w-action-btn" style="margin:0 24px 8px" onclick="shareInvite()">${icon('link')} Invite a Friend</button>
     <button class="w-action-btn" style="margin:0 24px 8px" onclick="window.open('https://forms.gle/QMHZaYy2grUNmCpJ7','_blank');track('feedback_click')">${icon('edit')} Send Feedback</button>
+    <button class="w-action-btn" style="margin:0 24px 8px" onclick="window.open('/privacy.html','_blank')">Privacy Policy</button>
     ${(typeof isGuest === 'function' && isGuest())
       ? `<div class="guest-cta" style="margin:0 24px 8px">
            <div class="guest-cta-text">You're using Arete as a guest. Your data lives only on this device.</div>
@@ -1491,8 +1503,30 @@ function renderStats() {
       : `<button class="w-action-btn" style="margin:0 24px 8px" onclick="forceSync()" id="force-sync-btn">${icon('refresh')} Force Sync Now</button>
          <div id="sync-log" style="margin:0 24px 8px;font-size:11px;color:var(--text-dim);max-height:120px;overflow:auto;font-family:monospace;white-space:pre-wrap"></div>
          <button class="w-action-btn" style="margin:0 24px 32px;color:var(--fat);border-color:var(--fat)" onclick="if(confirm('Sign out?'))authSignOut()">Sign Out</button>`}
+    ${_errorLogHTML()}
     <div style="text-align:center;padding:0 24px 28px;font-size:10px;color:var(--text-muted);letter-spacing:0.08em">ARETE ${(() => { try { return 'v' + (document.querySelector('script[src*="app.js?v="]').src.match(/v=(\d+)/) || [])[1]; } catch { return ''; } })()}</div>`;
   qTimer = setInterval(() => rotQ(1), 30000);
+}
+
+// Recent errors, on-device. Hidden entirely when there's nothing to report so
+// a healthy install shows no scary panel.
+function _errorLogHTML() {
+  const log = (typeof getErrorLog === 'function') ? getErrorLog() : [];
+  if (!log.length) return '';
+  const rows = log.slice(0, 6).map(e => {
+    const when = (e.at || '').slice(5, 16).replace('T', ' ');
+    return `<div style="padding:5px 0;border-bottom:1px solid var(--border2)">
+      <div style="color:var(--fat);font-size:10.5px">${esc(String(e.msg || '').slice(0, 90))}</div>
+      <div style="color:var(--text-muted);font-size:9.5px;margin-top:1px">${when} · ${esc(e.where || '')}${e.src ? ' · ' + esc(e.src) : ''}${e.line ? ':' + e.line : ''} · v${esc(String(e.v || '?'))}</div>
+    </div>`;
+  }).join('');
+  return `
+    <div class="sec-lbl" style="padding:8px 24px 6px">RECENT ISSUES (${log.length})</div>
+    <div style="margin:0 24px 8px;padding:10px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:12px;font-family:monospace">
+      ${rows}
+      <div style="font-size:9.5px;color:var(--text-muted);margin-top:8px;font-family:var(--display)">Reported anonymously to help fix bugs. No personal data included.</div>
+    </div>
+    <button class="w-action-btn" style="margin:0 24px 20px" onclick="clearErrorLog()">Clear issue log</button>`;
 }
 
 function openEditName() {

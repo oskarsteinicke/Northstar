@@ -837,7 +837,79 @@ window.addEventListener('online', () => { _updateOnlineStatus(); if (getAccessTo
 window.addEventListener('offline', _updateOnlineStatus);
 
 // ── NOTIFICATIONS ───────────────────────────────────────────────────────
+// Web notifications only fire while the page is open, which is the opposite of
+// what a habit reminder needs. Inside the native shell we schedule real
+// on-device notifications that repeat daily whether or not the app is running;
+// on the web we keep the old best-effort behaviour.
+function _nativeNotifier() {
+  try {
+    const C = window.Capacitor;
+    return (C && C.Plugins && C.Plugins.LocalNotifications) || null;
+  } catch { return null; }
+}
+
+// Fixed ids so re-arming replaces rather than stacks duplicates
+const REMINDER_SLOTS = [
+  { id: 1101, hour: 7,  minute: 30, title: 'Good morning ☀️',
+    body: 'New day, new chance to show up. Set the tone early.' },
+  { id: 1102, hour: 12, minute: 30, title: 'Log your meals 🥗',
+    body: 'A few seconds of tracking keeps your targets honest.' },
+  { id: 1103, hour: 20, minute: 30, title: 'Finish the day strong 🔥',
+    body: 'Any habits still open? Don\'t let a streak break tonight.' },
+];
+
+async function scheduleNativeReminders() {
+  const N = _nativeNotifier();
+  if (!N) return false;
+  try {
+    let perm = await N.checkPermissions();
+    if (perm.display !== 'granted') {
+      perm = await N.requestPermissions();
+      if (perm.display !== 'granted') return false;
+    }
+    // Always clear ours first so an upgrade or a settings change can't stack
+    await N.cancel({ notifications: REMINDER_SLOTS.map(s => ({ id: s.id })) }).catch(() => {});
+    if (!settings.notifications) return true; // permitted, but user turned them off
+    await N.schedule({
+      notifications: REMINDER_SLOTS.map(s => ({
+        id: s.id, title: s.title, body: s.body,
+        schedule: { on: { hour: s.hour, minute: s.minute }, allowWhileIdle: true },
+      })),
+    });
+    return true;
+  } catch (e) { reportError('notify-schedule', e); return false; }
+}
+
+async function cancelNativeReminders() {
+  const N = _nativeNotifier();
+  if (!N) return;
+  try { await N.cancel({ notifications: REMINDER_SLOTS.map(s => ({ id: s.id })) }); }
+  catch (e) { reportError('notify-cancel', e); }
+}
+
+function setNotifications(on) {
+  settings.notifications = !!on;
+  LS.set('hvi_settings', settings);
+  if (_nativeNotifier()) {
+    (on ? scheduleNativeReminders() : cancelNativeReminders())
+      .then(() => { if (typeof renderStats === 'function') renderStats(); });
+    return;
+  }
+  if (typeof renderStats === 'function') renderStats();
+}
+
 function requestNotifications() {
+  // Native: ask through the plugin and arm the real schedule
+  if (_nativeNotifier()) {
+    settings.notifications = true;
+    LS.set('hvi_settings', settings);
+    scheduleNativeReminders().then(ok => {
+      settings.notifications = !!ok;
+      LS.set('hvi_settings', settings);
+      if (typeof renderStats === 'function') renderStats();
+    });
+    return;
+  }
   if (!('Notification' in window)) return;
   Notification.requestPermission().then(p => {
     settings.notifications = p === 'granted';
@@ -847,6 +919,10 @@ function requestNotifications() {
   });
 }
 function _scheduleReminder() {
+  // Native builds use scheduleNativeReminders(); this polling fallback is only
+  // meaningful on the web, where it can fire while the tab is alive.
+  if (_nativeNotifier()) return;
+  if (!('Notification' in window)) return;
   if (!settings.notifications || Notification.permission !== 'granted') return;
   const now = new Date();
   const hour = now.getHours();
@@ -1114,6 +1190,9 @@ async function init() {
   initPullToRefresh();
   _updateOnlineStatus();
   _scheduleReminder();
+  // Re-arm native reminders on every launch: a reinstall, an OS update or a
+  // schedule change can drop them, and re-arming is idempotent.
+  if (_nativeNotifier() && settings.notifications) scheduleNativeReminders();
 
   if (!LS.get('hvi_onboarded', false)) {
     renderOnboarding(0);
@@ -2303,9 +2382,72 @@ function _getChangedKeys() {
   return changed;
 }
 
-// ── ERROR BOUNDARY ───────────────────────────────────────────────────────
-window.onerror = function(msg, src, line) {
-  console.error('[arete] Error:', msg, src, line);
+// ── ERROR BOUNDARY + REPORTING ───────────────────────────────────────────
+// Errors used to stop at console.error, which meant a bug on someone else's
+// phone was invisible — the only ones ever found were the ones we happened to
+// trip over. Now they go to Analytics (already loaded) with enough context to
+// locate them, and the last few are kept on-device for the diagnostics panel.
+//
+// Deliberately narrow: only the error text, the script, the line and the view
+// being rendered. No habit, meal, workout or account content is ever attached.
+const APP_VERSION = (function () {
+  try {
+    const s = Array.prototype.slice.call(document.scripts).find(x => /app\.js/.test(x.src || ''));
+    const m = s && s.src.match(/[?&]v=(\d+)/);
+    return m ? m[1] : 'dev';
+  } catch { return 'dev'; }
+})();
+
+const _ERR_CAP = 8;          // per session, so a render loop can't spam
+let _errCount = 0;
+const _errSeen = new Set();  // one report per unique error per session
+
+function reportError(kind, msg, extra) {
+  try {
+    const text = String((msg && msg.message) || msg || 'unknown').slice(0, 300);
+    const sig = kind + '|' + text;
+    if (_errSeen.has(sig)) return;
+    _errSeen.add(sig);
+    if (++_errCount > _ERR_CAP) return;
+
+    const rec = Object.assign({
+      kind, msg: text,
+      where: (typeof curView !== 'undefined' && curView) || 'boot',
+      v: APP_VERSION,
+      at: new Date().toISOString(),
+    }, extra || {});
+
+    // On-device ring buffer, surfaced under Profile so issues can be read back
+    try {
+      const log = JSON.parse(localStorage.getItem('hvi_error_log') || '[]');
+      log.unshift(rec);
+      localStorage.setItem('hvi_error_log', JSON.stringify(log.slice(0, 20)));
+    } catch {}
+
+    if (typeof gtag === 'function') {
+      gtag('event', 'exception', {
+        description: `v${rec.v} ${kind}: ${text} @${rec.where}${rec.line ? ':' + rec.line : ''}${rec.src ? ' (' + rec.src + ')' : ''}`.slice(0, 480),
+        fatal: kind === 'crash',
+      });
+    }
+    console.error('[arete]', kind, text, extra || '');
+  } catch {}
+}
+
+function getErrorLog() {
+  try { return JSON.parse(localStorage.getItem('hvi_error_log') || '[]'); } catch { return []; }
+}
+function clearErrorLog() {
+  try { localStorage.removeItem('hvi_error_log'); } catch {}
+  if (typeof renderStats === 'function') renderStats();
+}
+
+window.onerror = function (msg, src, line, col, err) {
+  reportError('crash', msg, {
+    src: String(src || '').split('/').pop().split('?')[0],
+    line: line || 0,
+    stack: err && err.stack ? String(err.stack).slice(0, 240) : undefined,
+  });
   const view = document.getElementById('view');
   if (view && !document.querySelector('.error-boundary')) {
     const el = document.createElement('div');
@@ -2319,7 +2461,10 @@ window.onerror = function(msg, src, line) {
 };
 
 window.addEventListener('unhandledrejection', e => {
-  console.error('[arete] Unhandled rejection:', e.reason);
+  const r = e && e.reason;
+  reportError('promise', r, {
+    stack: r && r.stack ? String(r.stack).slice(0, 240) : undefined,
+  });
 });
 
 // ── PULL-TO-REFRESH ──────────────────────────────────────────────────────
