@@ -808,6 +808,66 @@ async function calculateMealDescription() {
   }
 }
 
+// Collapse a multi-item result into the single row the user is editing, e.g.
+// "rye bread with butter" comes back as two foods but belongs in one row.
+function _mergeToOneItem(items, fallbackName) {
+  const t = items.reduce((a, i) => ({
+    calories: a.calories + (Number(i.calories) || 0),
+    protein:  a.protein  + (Number(i.protein)  || 0),
+    carbs:    a.carbs    + (Number(i.carbs)    || 0),
+    fat:      a.fat      + (Number(i.fat)      || 0),
+  }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+  return {
+    // A single result usually carries a better name than the user typed
+    // ("Rye bread (2 slices)"), so prefer it.
+    name: (items.length === 1 && items[0].name) ? String(items[0].name) : fallbackName,
+    calories: Math.round(t.calories), protein: Math.round(t.protein),
+    carbs: Math.round(t.carbs), fat: Math.round(t.fat),
+  };
+}
+
+// Resolve one food name to macros using the same ladder as the meal describer:
+// cache, then AI, then the local food database.
+async function _macrosForFood(text) {
+  const key = String(text || '').toLowerCase().trim();
+  if (!key) return null;
+
+  const cached = _getCachedMeal(key);
+  if (cached && cached.length) return _mergeToOneItem(cached, text);
+
+  try {
+    const sysPrompt =
+      'You are a nutrition macro calculator that ONLY outputs JSON. Never output any text, explanation, or markdown — ONLY a raw JSON array.\n\n' +
+      'INPUT: The name of a single food or ingredient (may be vague, slang, a brand, or any language).\n' +
+      'OUTPUT: A JSON array where each element has exactly these keys: "name" (string), "calories" (integer), "protein" (integer), "carbs" (integer), "fat" (integer).\n\n' +
+      'RULES:\n' +
+      '- Prefer ONE element unless the input clearly describes several foods\n' +
+      '- All macro values MUST be integers\n' +
+      '- Use a typical serving size when no quantity is given, and put it in the name, e.g. "Rye bread (2 slices)"\n' +
+      '- If a quantity is given, combine it into the totals\n' +
+      '- If unidentifiable, estimate anyway — never refuse\n' +
+      '- NEVER wrap in markdown code fences\n' +
+      '- Your ENTIRE response must be parseable by JSON.parse()';
+    const raw = await _aiFetch([
+      { role: 'system', content: sysPrompt },
+      { role: 'user', content: 'Calculate macros for: ' + text }
+    ], { jsonMode: true });
+    const clean = raw.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '').trim();
+    const jsonStr = _extractJsonArray(clean);
+    if (jsonStr) {
+      const items = JSON.parse(jsonStr);
+      if (Array.isArray(items) && items.length) {
+        _cacheMeal(key, items);
+        return _mergeToOneItem(items, text);
+      }
+    }
+  } catch (e) { /* fall through to the local database */ }
+
+  const local = _localFoodLookup(text);
+  if (local && local.length) return _mergeToOneItem(local, text);
+  return null;
+}
+
 // Photo scan and text description share this list but render into different
 // containers on the same screen. Remember which one is live so the edit,
 // cancel and remove handlers — which call this with no argument — rebuild the
@@ -826,10 +886,17 @@ function _renderParsedItems(out) {
   if (other) other.innerHTML = '';
   if (!_parsedMealItems.length) { out.innerHTML = ''; return; }
   const rows = _parsedMealItems.map((it, i) => {
+    if (_recalcIdx === i) {
+      return `<div class="dm-row">
+        <div class="dm-row-name">${esc(it.name)}</div>
+        <div class="dm-row-macros">‣ Estimating macros…</div>
+      </div>`;
+    }
     const editing = _editingParsedIdx === i;
     if (editing) {
       return `<div class="dm-row dm-row-editing">
         <input class="dm-edit-input dm-edit-name" value="${esc(it.name)}" placeholder="Name" id="pei-name-${i}">
+        <div class="dm-edit-hint">Change the name and the macros are re-estimated automatically. Type numbers to override.</div>
         <div class="dm-edit-macros">
           <label class="dm-edit-field"><span>Cal</span><input type="number" value="${it.calories}" id="pei-cal-${i}"></label>
           <label class="dm-edit-field"><span>P</span><input type="number" value="${it.protein}" id="pei-p-${i}"></label>
@@ -856,23 +923,72 @@ function _renderParsedItems(out) {
 }
 
 let _editingParsedIdx = -1;
+let _recalcIdx = -1;   // row currently having its macros re-estimated
 
 function _editParsedItem(idx) {
   _editingParsedIdx = idx;
   _renderParsedItems();
 }
 
-function _saveParsedEdit(idx) {
+// Renaming an item used to keep the old macros, so swapping white bread for rye
+// changed the label and nothing else. A new name now re-estimates its macros —
+// unless the numbers were edited too, in which case those were explicit and win.
+async function _saveParsedEdit(idx) {
   const it = _parsedMealItems[idx];
   if (!it) return;
-  const name = document.getElementById('pei-name-' + idx)?.value?.trim();
-  if (name) it.name = name;
-  it.calories = Math.round(Number(document.getElementById('pei-cal-' + idx)?.value) || 0);
-  it.protein = Math.round(Number(document.getElementById('pei-p-' + idx)?.value) || 0);
-  it.carbs = Math.round(Number(document.getElementById('pei-c-' + idx)?.value) || 0);
-  it.fat = Math.round(Number(document.getElementById('pei-f-' + idx)?.value) || 0);
+  // A missing field means "no change", never zero — losing someone's macros
+  // because an input wasn't in the DOM would be silent data loss.
+  const num = (suffix, cur) => {
+    const el = document.getElementById('pei-' + suffix + '-' + idx);
+    if (!el) return cur;
+    const v = Number(el.value);
+    return (el.value === '' || !isFinite(v)) ? 0 : Math.round(v);
+  };
+  const nameEl = document.getElementById('pei-name-' + idx);
+  const newName = nameEl ? String(nameEl.value || '').trim() : String(it.name || '');
+  const typed = {
+    calories: num('cal', it.calories),
+    protein:  num('p',   it.protein),
+    carbs:    num('c',   it.carbs),
+    fat:      num('f',   it.fat),
+  };
+  const macrosTouched = typed.calories !== it.calories || typed.protein !== it.protein ||
+                        typed.carbs !== it.carbs || typed.fat !== it.fat;
+  const nameChanged = !!newName && newName.toLowerCase() !== String(it.name || '').toLowerCase();
+
+  if (!nameChanged || macrosTouched) {
+    if (newName) it.name = newName;
+    Object.assign(it, typed);
+    _editingParsedIdx = -1;
+    _renderParsedItems();
+    return;
+  }
+
+  // Show the row as busy while the estimate is fetched
+  it.name = newName;
   _editingParsedIdx = -1;
+  _recalcIdx = idx;
   _renderParsedItems();
+
+  let fresh = null;
+  try { fresh = await _macrosForFood(newName); }
+  catch (e) { if (typeof reportError === 'function') reportError('macro-recalc', e); }
+
+  _recalcIdx = -1;
+  // Guard against the list changing while the request was in flight
+  const cur = _parsedMealItems[idx];
+  if (!cur) { _renderParsedItems(); return; }
+  if (fresh) {
+    cur.name = fresh.name || newName;
+    cur.calories = fresh.calories; cur.protein = fresh.protein;
+    cur.carbs = fresh.carbs; cur.fat = fresh.fat;
+  }
+  _renderParsedItems();
+  if (!fresh) {
+    const out = document.getElementById(_parsedOutId);
+    if (out) out.insertAdjacentHTML('afterbegin',
+      '<p class="dm-hint dm-warn" style="font-size:11px;margin-bottom:8px">Couldn\'t estimate macros for that name — the previous values were kept. Edit them by hand or try a simpler name.</p>');
+  }
 }
 
 function addAllDescribed() {

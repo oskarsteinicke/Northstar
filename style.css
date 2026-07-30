@@ -1988,6 +1988,7 @@ nav {
 /* ── Meal Item Edit ────────────────────────────────────────────────────── */
 .dm-row-editing { flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--accent); border-radius: var(--radius); background: rgba(217,180,106,0.04); }
 .dm-edit-input { width: 100%; padding: 8px 10px; border: 1px solid var(--border2); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 14px; }
+.dm-edit-hint { font-size: 10.5px; line-height: 1.45; color: var(--text-muted); margin: -2px 0 2px; }
 .dm-edit-macros { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .dm-edit-field { display: flex; flex-direction: column; gap: 2px; }
 .dm-edit-field span { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
