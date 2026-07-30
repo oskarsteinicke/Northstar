@@ -1425,13 +1425,23 @@ function renderStats() {
       </div>
       ${(() => {
         const native = typeof _nativeNotifier === 'function' && !!_nativeNotifier();
-        if (!native && !('Notification' in window)) return '';
-        const webGranted = !native && Notification.permission === 'granted';
+        const push = typeof pushSupported === 'function' && pushSupported();
+        if (!native && !push && !('Notification' in window)) return '';
+        const granted = native || (('Notification' in window) && Notification.permission === 'granted');
         // The toggle reflects the setting, not the browser permission — it used
         // to read permission, so switching Off never appeared to stick.
-        const on = !!settings.notifications && (native || webGranted);
-        const needsPerm = !native && !webGranted;
-        return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${native ? 14 : 4}px">
+        const on = !!settings.notifications && granted;
+        const needsPerm = !native && !granted;
+        const needsInstall = !native && typeof pushNeedsInstall === 'function' && pushNeedsInstall();
+        const err = (typeof notifyError === 'function' && notifyError()) || '';
+        const note = native
+          ? ''
+          : needsInstall
+            ? 'Add Arete to your Home Screen (Share → Add to Home Screen) to get reminders while the app is closed.'
+            : push
+              ? 'Reminders arrive at 7:30, 12:30 and 20:30 — even when Arete is closed.'
+              : 'Your browser can only show reminders while Arete is open.';
+        return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${note || err ? 4 : 14}px">
           <div style="font-size:14px;color:var(--text)">Reminders</div>
           <div class="unit-toggle">
             ${needsPerm
@@ -1440,7 +1450,8 @@ function renderStats() {
                  <button class="unit-btn${!on ? ' unit-btn-active' : ''}" onclick="setNotifications(false)">Off</button>`}
           </div>
         </div>
-        ${native ? '' : `<div style="font-size:10.5px;color:var(--text-muted);line-height:1.45;margin-bottom:14px">Browser reminders only fire while Arete is open. Install the app to your home screen for reminders that reach you in the background.</div>`}`;
+        ${err ? `<div style="font-size:11px;color:var(--fat);line-height:1.45;margin-bottom:14px">${esc(err)}</div>`
+              : note ? `<div style="font-size:10.5px;color:var(--text-muted);line-height:1.45;margin-bottom:14px">${note}</div>` : ''}`;
       })()}
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
         <div style="font-size:14px;color:var(--text)">App version</div>

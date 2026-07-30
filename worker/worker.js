@@ -18,8 +18,11 @@
 //   STRIPE_PRICE_YEARLY   — Stripe price ID for $59/yr Premium
 //   SUPABASE_SERVICE_KEY  — Supabase service_role key (updates user plan metadata)
 //   N8N_WELCOME_WEBHOOK_URL — n8n webhook URL POSTed to on each new signup
-// KV binding needed:
-//   HEALTH_KV             — KV namespace for Apple Health data
+
+//   VAPID_PRIVATE_JWK     — Web push signing key (JWK). Set via: wrangler secret put VAPID_PRIVATE_JWK
+//   VAPID_PUBLIC_KEY      — Web push public key, must match VAPID_PUBLIC_KEY in app.js
+
+//   HEALTH_KV             — KV namespace for Apple Health data and push subscriptions
 
 const ALLOWED_ORIGINS = [
   'https://get-arete.com',
@@ -206,6 +209,137 @@ async function updateUserMeta(userId, meta, env) {
     body: JSON.stringify({ user_metadata: meta }),
   });
   return res.ok;
+}
+
+// ── WEB PUSH ──────────────────────────────────────────────────────────────
+// Reminders for the installed web app. Pushes carry no payload, so only VAPID
+// auth is needed and the RFC 8291 encryption step is skipped entirely; the
+// service worker writes the wording locally. Nothing about a person's habits
+// or meals passes through Apple's or Google's push service.
+//
+// Subscriptions live in HEALTH_KV under a `push:` prefix, reusing the existing
+// namespace so no new binding has to be provisioned.
+const PUSH_SLOTS = ['07:30', '12:30', '20:30'];
+
+function b64urlFromBytes(buf) {
+  const b = new Uint8Array(buf);
+  let s = '';
+  for (let i = 0; i < b.length; i++) s += String.fromCharCode(b[i]);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// Stable, filename-safe key for an endpoint URL
+async function pushKeyFor(endpoint) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(endpoint));
+  return 'push:' + b64urlFromBytes(digest).slice(0, 32);
+}
+
+// Signed VAPID header proving the push comes from us. ECDSA P-256 signatures
+// from Web Crypto are already raw r||s, which is exactly the JWS ES256 form.
+async function vapidAuth(endpoint, env) {
+  const jwk = JSON.parse(env.VAPID_PRIVATE_JWK);
+  const key = await crypto.subtle.importKey(
+    'jwk', jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  const enc = new TextEncoder();
+  const header = b64urlFromBytes(enc.encode(JSON.stringify({ typ: 'JWT', alg: 'ES256' })));
+  const payload = b64urlFromBytes(enc.encode(JSON.stringify({
+    aud: new URL(endpoint).origin,
+    exp: Math.floor(Date.now() / 1000) + 12 * 3600,
+    sub: 'mailto:oskarsteinicke@gmail.com',
+  })));
+  const sig = await crypto.subtle.sign(
+    { name: 'ECDSA', hash: 'SHA-256' }, key, enc.encode(`${header}.${payload}`));
+  return `vapid t=${header}.${payload}.${b64urlFromBytes(sig)}, k=${env.VAPID_PUBLIC_KEY}`;
+}
+
+async function handlePushSubscribe(body, env, origin) {
+  const { endpoint, keys, tzOffset } = body || {};
+  if (!endpoint || typeof endpoint !== 'string' || !/^https:\/\//.test(endpoint)) {
+    return jsonResponse({ error: 'Invalid endpoint' }, 400, origin);
+  }
+  if (!env.HEALTH_KV) return jsonResponse({ error: 'Storage not bound' }, 500, origin);
+  const k = await pushKeyFor(endpoint);
+  const prev = await env.HEALTH_KV.get(k);
+  let sent = {};
+  try { sent = prev ? (JSON.parse(prev).sent || {}) : {}; } catch {}
+  await env.HEALTH_KV.put(k, JSON.stringify({
+    endpoint,
+    keys: keys || {},
+    // Minutes east of UTC. Re-sent on every launch, so DST and travel correct
+    // themselves without the server tracking timezone rules.
+    tzOffset: Number.isFinite(+tzOffset) ? Math.max(-840, Math.min(840, +tzOffset)) : 0,
+    sent,                       // slot -> local date already delivered
+    updatedAt: new Date().toISOString(),
+  }));
+  return jsonResponse({ ok: true }, 200, origin);
+}
+
+async function handlePushUnsubscribe(body, env, origin) {
+  const { endpoint } = body || {};
+  if (!endpoint) return jsonResponse({ error: 'Missing endpoint' }, 400, origin);
+  if (!env.HEALTH_KV) return jsonResponse({ error: 'Storage not bound' }, 500, origin);
+  await env.HEALTH_KV.delete(await pushKeyFor(endpoint));
+  return jsonResponse({ ok: true }, 200, origin);
+}
+
+// Which slot, if any, the given local time currently falls in. The cron runs
+// on the hour and half hour, so a slot is live for the 30 minutes after it.
+function slotDueAt(localDate) {
+  const hh = localDate.getUTCHours(), mm = localDate.getUTCMinutes();
+  for (const slot of PUSH_SLOTS) {
+    const [sh, sm] = slot.split(':').map(Number);
+    const delta = (hh * 60 + mm) - (sh * 60 + sm);
+    if (delta >= 0 && delta < 30) return slot;
+  }
+  return null;
+}
+
+async function sendPush(endpoint, env) {
+  return fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Authorization': await vapidAuth(endpoint, env),
+      'TTL': '3600',
+      'Content-Length': '0',
+    },
+  });
+}
+
+async function runReminders(env) {
+  if (!env.HEALTH_KV || !env.VAPID_PRIVATE_JWK || !env.VAPID_PUBLIC_KEY) return;
+  const now = Date.now();
+  let cursor;
+  do {
+    const page = await env.HEALTH_KV.list({ prefix: 'push:', cursor });
+    for (const entry of page.keys) {
+      const raw = await env.HEALTH_KV.get(entry.name);
+      if (!raw) continue;
+      let sub;
+      try { sub = JSON.parse(raw); } catch { continue; }
+      if (!sub.endpoint) continue;
+
+      const local = new Date(now + (sub.tzOffset || 0) * 60000);
+      const slot = slotDueAt(local);
+      if (!slot) continue;
+      const localDay = local.toISOString().slice(0, 10);
+      if (sub.sent && sub.sent[slot] === localDay) continue;  // already sent today
+
+      try {
+        const res = await sendPush(sub.endpoint, env);
+        // The push service reports a dead subscription; stop paying for it
+        if (res.status === 404 || res.status === 410) {
+          await env.HEALTH_KV.delete(entry.name);
+          continue;
+        }
+        if (res.ok || res.status === 201) {
+          sub.sent = sub.sent || {};
+          sub.sent[slot] = localDay;
+          await env.HEALTH_KV.put(entry.name, JSON.stringify(sub));
+        }
+      } catch (e) { /* transient: the next run retries */ }
+    }
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor);
 }
 
 // ── ACCOUNT DELETION ──────────────────────────────────────────────────────
@@ -445,6 +579,14 @@ export default {
         return handleAccountDelete(request, env, origin);
       }
 
+      // Web push reminder subscriptions
+      if (path === '/push/subscribe') {
+        return handlePushSubscribe(await request.json(), env, origin);
+      }
+      if (path === '/push/unsubscribe') {
+        return handlePushUnsubscribe(await request.json(), env, origin);
+      }
+
       // Stripe checkout session
       if (path === '/stripe/checkout') {
         return handleCheckout(await request.json(), env, origin);
@@ -507,5 +649,11 @@ export default {
     } catch (e) {
       return jsonResponse({ error: e.message }, 500, origin);
     }
-  }
+  },
+
+  // Cron trigger: fires on the hour and half hour, sending any reminder whose
+  // local slot has just come round for that subscriber.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runReminders(env));
+  },
 };

@@ -931,19 +931,139 @@ async function cancelNativeReminders() {
   catch (e) { reportError('notify-cancel', e); }
 }
 
+// ── WEB PUSH ──────────────────────────────────────────────────────────────
+// The polling fallback can only fire while the tab is alive, so an installed
+// PWA uses real Web Push instead: the worker sends on a schedule and the
+// service worker shows the notification even when Arete is closed. iOS has
+// supported this since 16.4, but only for a Home Screen install.
+const VAPID_PUBLIC_KEY = 'BBn2k9kMM_YpWz4RE4BWwB6g0GFQVtQzJM5XcxlwHOlPEVggoJ-Q9ni5L51r3NehpNAEHmZlC5rXppwYuk2llnM';
+
+function _b64ToBytes(b64) {
+  const pad = '='.repeat((4 - (b64.length % 4)) % 4);
+  const raw = atob((b64 + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+function pushSupported() {
+  return typeof navigator !== 'undefined' && 'serviceWorker' in navigator &&
+    typeof PushManager !== 'undefined' && 'Notification' in window;
+}
+
+function isStandalone() {
+  try {
+    return !!(navigator.standalone ||
+      (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches));
+  } catch { return false; }
+}
+
+// On iPhone, Safari only grants push to a Home Screen install
+function pushNeedsInstall() {
+  return /iP(hone|ad|od)/.test(navigator.userAgent || '') && !isStandalone();
+}
+
+async function _syncPushSubscription(sub) {
+  try {
+    const j = sub.toJSON();
+    const res = await fetch(`${_ACCOUNT_WORKER}/push/subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        endpoint: j.endpoint,
+        keys: j.keys || {},
+        // Sent on every launch so the schedule follows travel and DST
+        tzOffset: -new Date().getTimezoneOffset(),
+      }),
+    });
+    return res.ok;
+  } catch { return false; }
+}
+
+async function enableWebPush() {
+  if (!pushSupported()) return { error: 'This browser cannot deliver background reminders.' };
+  if (pushNeedsInstall()) {
+    return { error: 'On iPhone, add Arete to your Home Screen first (Share → Add to Home Screen), then turn reminders on from there.' };
+  }
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') return { error: 'Notifications were not allowed.' };
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: _b64ToBytes(VAPID_PUBLIC_KEY),
+      });
+    }
+    if (!(await _syncPushSubscription(sub))) {
+      return { error: 'Could not reach the reminder service. Check your connection and try again.' };
+    }
+    return { ok: true };
+  } catch (e) {
+    reportError('push-enable', e);
+    return { error: 'Could not enable reminders.' };
+  }
+}
+
+async function disableWebPush() {
+  if (!pushSupported()) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return;
+    // Tell the server first: if unsubscribing succeeds but the call fails we
+    // would keep being sent pushes for an endpoint that no longer exists.
+    await fetch(`${_ACCOUNT_WORKER}/push/unsubscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: sub.endpoint }),
+    }).catch(() => {});
+    await sub.unsubscribe().catch(() => {});
+  } catch (e) { reportError('push-disable', e); }
+}
+
+// Refresh on launch so a changed timezone or a rotated endpoint is picked up
+async function refreshPushSubscription() {
+  if (!settings.notifications || !pushSupported() || _nativeNotifier()) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) _syncPushSubscription(sub);
+  } catch {}
+}
+
 function setNotifications(on) {
   settings.notifications = !!on;
   LS.set('hvi_settings', settings);
+  const done = () => { if (typeof renderStats === 'function') renderStats(); };
   if (_nativeNotifier()) {
-    (on ? scheduleNativeReminders() : cancelNativeReminders())
-      .then(() => { if (typeof renderStats === 'function') renderStats(); });
+    (on ? scheduleNativeReminders() : cancelNativeReminders()).then(done);
     return;
   }
-  if (typeof renderStats === 'function') renderStats();
+  if (pushSupported()) {
+    (on ? enableWebPush() : disableWebPush()).then(res => {
+      // Turning on can fail (permission refused, no Home Screen install)
+      if (on && res && res.error) {
+        settings.notifications = false;
+        LS.set('hvi_settings', settings);
+        _notifyError = res.error;
+      } else {
+        _notifyError = '';
+      }
+      done();
+    });
+    return;
+  }
+  done();
 }
 
+// Surfaced under the Reminders toggle so a refusal explains itself
+let _notifyError = '';
+function notifyError() { return _notifyError; }
+
 function requestNotifications() {
-  // Native: ask through the plugin and arm the real schedule
+  // Native shell: ask through the plugin and arm the real schedule
   if (_nativeNotifier()) {
     settings.notifications = true;
     LS.set('hvi_settings', settings);
@@ -954,6 +1074,9 @@ function requestNotifications() {
     });
     return;
   }
+  // Installed web app: real background push
+  if (pushSupported()) { setNotifications(true); return; }
+  // Last resort: the in-page fallback, which only fires while Arete is open
   if (!('Notification' in window)) return;
   Notification.requestPermission().then(p => {
     settings.notifications = p === 'granted';
@@ -1237,6 +1360,7 @@ async function init() {
   // Re-arm native reminders on every launch: a reinstall, an OS update or a
   // schedule change can drop them, and re-arming is idempotent.
   if (_nativeNotifier() && settings.notifications) scheduleNativeReminders();
+  refreshPushSubscription();
 
   if (!LS.get('hvi_onboarded', false)) {
     renderOnboarding(0);

@@ -6,3 +6,8 @@ compatibility_date = "2024-01-01"
 [[kv_namespaces]]
 binding = "HEALTH_KV"
 id = "92ae048db60145e788f12578b1c9f426"
+
+# Web push reminders: check every half hour so each timezone's 07:30 / 12:30 /
+# 20:30 slots are hit. Subscriptions live in HEALTH_KV under a "push:" prefix.
+[triggers]
+crons = ["0,30 * * * *"]
