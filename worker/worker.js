@@ -208,6 +208,96 @@ async function updateUserMeta(userId, meta, env) {
   return res.ok;
 }
 
+// ── ACCOUNT DELETION ──────────────────────────────────────────────────────
+// Apple requires in-app account deletion for any app that offers sign-up
+// (App Store guideline 5.1.1(v)), and GDPR erasure needs it regardless.
+// Removing an auth user needs the service_role key, which must never reach the
+// client, so it happens here.
+//
+// Identity is taken from the caller's own access token, never from the request
+// body — the token is exchanged for a user id at Supabase, and only that id is
+// ever deleted. A stolen or forged token simply fails that exchange.
+async function handleAccountDelete(request, env, origin) {
+  if (!env.SUPABASE_SERVICE_KEY) {
+    return jsonResponse({ error: 'Not configured' }, 500, origin);
+  }
+  const auth = request.headers.get('Authorization') || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!token) return jsonResponse({ error: 'Missing token' }, 401, origin);
+
+  // Resolve the token to a user. This is the authorisation check.
+  const meRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+    headers: { 'Authorization': `Bearer ${token}`, 'apikey': env.SUPABASE_SERVICE_KEY },
+  });
+  if (!meRes.ok) return jsonResponse({ error: 'Invalid session' }, 401, origin);
+  const me = await meRes.json();
+  const userId = me && me.id;
+  if (!userId) return jsonResponse({ error: 'Invalid session' }, 401, origin);
+
+  const admin = {
+    'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+    'apikey': env.SUPABASE_SERVICE_KEY,
+    'Content-Type': 'application/json',
+  };
+  const failed = [];
+
+  // Cancel any live subscription FIRST. Only the customer id is stored, so the
+  // subscriptions have to be looked up from it. This deliberately fails closed:
+  // deleting the login while a subscription still bills would leave someone
+  // paying with no way to sign in and stop it.
+  try {
+    const customer = me.user_metadata && me.user_metadata.stripe_customer;
+    if (customer && env.STRIPE_SECRET_KEY) {
+      const listRes = await fetch(
+        `${STRIPE_API}/subscriptions?customer=${encodeURIComponent(customer)}&status=all&limit=20`,
+        { headers: { 'Authorization': `Bearer ${env.STRIPE_SECRET_KEY}` } });
+      const list = await listRes.json();
+      if (!listRes.ok) throw new Error('list failed');
+      const live = (list.data || []).filter(s =>
+        s.status === 'active' || s.status === 'trialing' || s.status === 'past_due');
+      for (const s of live) {
+        const c = await fetch(`${STRIPE_API}/subscriptions/${s.id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${env.STRIPE_SECRET_KEY}` },
+        });
+        if (!c.ok) throw new Error('cancel failed');
+      }
+    }
+  } catch (e) {
+    return jsonResponse({
+      error: 'Could not cancel your subscription, so nothing was deleted. Please try again, or cancel your subscription first.',
+    }, 502, origin);
+  }
+
+  // Synced app data, then leaderboard membership, then the account itself.
+  // Data first: if anything fails we stop rather than orphan rows behind a
+  // deleted login that nobody can authenticate as to retry.
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/hvi_data?user_id=eq.${userId}`,
+      { method: 'DELETE', headers: admin });
+    if (!r.ok) failed.push('data');
+  } catch (e) { failed.push('data'); }
+
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/leaderboard_members?user_id=eq.${userId}`,
+      { method: 'DELETE', headers: admin });
+    if (!r.ok) failed.push('leaderboard');
+  } catch (e) { failed.push('leaderboard'); }
+
+  if (failed.length) {
+    return jsonResponse({ error: 'Could not remove all data', failed }, 500, origin);
+  }
+
+  const del = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`,
+    { method: 'DELETE', headers: admin });
+  if (!del.ok) {
+    const detail = await del.text().catch(() => '');
+    return jsonResponse({ error: 'Could not delete account', detail: detail.slice(0, 200) }, 500, origin);
+  }
+
+  return jsonResponse({ ok: true }, 200, origin);
+}
+
 // Create Stripe Checkout session (single Premium tier, monthly or yearly)
 async function handleCheckout(body, env, origin) {
   const { user_id, email, billing } = body;
@@ -350,6 +440,11 @@ export default {
     }
 
     try {
+      // Account deletion — authorised by the caller's own bearer token
+      if (path === '/account/delete') {
+        return handleAccountDelete(request, env, origin);
+      }
+
       // Stripe checkout session
       if (path === '/stripe/checkout') {
         return handleCheckout(await request.json(), env, origin);

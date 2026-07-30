@@ -1502,10 +1502,83 @@ function renderStats() {
          <button class="w-action-btn" style="margin:8px 24px 32px" onclick="showAuth()">Already have an account? Sign in</button>`
       : `<button class="w-action-btn" style="margin:0 24px 8px" onclick="forceSync()" id="force-sync-btn">${icon('refresh')} Force Sync Now</button>
          <div id="sync-log" style="margin:0 24px 8px;font-size:11px;color:var(--text-dim);max-height:120px;overflow:auto;font-family:monospace;white-space:pre-wrap"></div>
-         <button class="w-action-btn" style="margin:0 24px 32px;color:var(--fat);border-color:var(--fat)" onclick="if(confirm('Sign out?'))authSignOut()">Sign Out</button>`}
+         <button class="w-action-btn" style="margin:0 24px 8px;color:var(--fat);border-color:var(--fat)" onclick="if(confirm('Sign out?'))authSignOut()">Sign Out</button>
+         <button class="w-action-btn" style="margin:0 24px 32px;color:var(--text-muted)" onclick="openDeleteAccount()">Delete Account</button>`}
     ${_errorLogHTML()}
     <div style="text-align:center;padding:0 24px 28px;font-size:10px;color:var(--text-muted);letter-spacing:0.08em">ARETE ${(() => { try { return 'v' + (document.querySelector('script[src*="app.js?v="]').src.match(/v=(\d+)/) || [])[1]; } catch { return ''; } })()}</div>`;
   qTimer = setInterval(() => rotQ(1), 30000);
+}
+
+// ── DELETE ACCOUNT ────────────────────────────────────────────────────────
+// Irreversible, so the sheet spells out what goes, and the confirm button
+// stays disabled until DELETE is typed. A plain confirm() is too easy to
+// dismiss by reflex for something that can't be undone.
+function openDeleteAccount() {
+  let modal = document.getElementById('del-acct-modal');
+  if (!modal) { modal = document.createElement('div'); modal.id = 'del-acct-modal'; document.body.appendChild(modal); }
+  modal.innerHTML = `
+    <div class="edit-habit-backdrop" onclick="closeDeleteAccount()"></div>
+    <div class="edit-habit-sheet">
+      <div class="edit-habit-title" style="color:var(--fat)">Delete account</div>
+      <div style="font-size:13px;color:var(--text-dim);line-height:1.6;margin-bottom:12px">
+        This permanently deletes your account and everything synced to it:
+      </div>
+      <ul style="font-size:12.5px;color:var(--text-dim);line-height:1.6;margin:0 0 12px 18px">
+        <li>Habits, streaks and journal</li>
+        <li>Workouts, personal records and progress</li>
+        <li>Meals, macros, bodyweight and sleep</li>
+        <li>Progress photos</li>
+        <li>Your leaderboard entries</li>
+      </ul>
+      <div style="font-size:12.5px;color:var(--text-dim);line-height:1.6;margin-bottom:14px">
+        Any active subscription is cancelled. <strong style="color:var(--text)">This cannot be undone</strong> and support cannot recover it.
+      </div>
+      <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:6px">Type DELETE to confirm</div>
+      <input class="d-input" id="del-acct-input" type="text" autocapitalize="characters" autocomplete="off"
+        placeholder="DELETE" oninput="_delAcctCheck()" style="margin-bottom:10px">
+      <div id="del-acct-error" style="color:var(--fat);font-size:12px;min-height:18px;margin-bottom:8px"></div>
+      <div style="display:flex;gap:10px">
+        <button class="w-action-btn" style="flex:1;margin:0" onclick="closeDeleteAccount()">Cancel</button>
+        <button class="w-action-btn" id="del-acct-go" disabled
+          style="flex:1;margin:0;opacity:0.4;color:var(--fat);border-color:var(--fat)"
+          onclick="_delAcctConfirm()">Delete</button>
+      </div>
+    </div>`;
+  modal.style.display = 'block';
+  setTimeout(() => document.getElementById('del-acct-input')?.focus(), 100);
+}
+
+function closeDeleteAccount() {
+  const m = document.getElementById('del-acct-modal');
+  if (m) m.style.display = 'none';
+}
+
+function _delAcctCheck() {
+  const ok = (document.getElementById('del-acct-input')?.value || '').trim().toUpperCase() === 'DELETE';
+  const btn = document.getElementById('del-acct-go');
+  if (btn) { btn.disabled = !ok; btn.style.opacity = ok ? '1' : '0.4'; }
+}
+
+async function _delAcctConfirm() {
+  const btn = document.getElementById('del-acct-go');
+  const err = document.getElementById('del-acct-error');
+  const input = document.getElementById('del-acct-input');
+  if ((input?.value || '').trim().toUpperCase() !== 'DELETE') return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; btn.style.opacity = '0.6'; }
+  if (err) err.textContent = '';
+
+  const res = await deleteAccount();
+  if (res && res.ok) {
+    // Only wipe the device once the server confirms the account is gone
+    wipeLocalData();
+    if (typeof cancelNativeReminders === 'function') { try { await cancelNativeReminders(); } catch {} }
+    closeDeleteAccount();
+    location.replace('/');
+    return;
+  }
+  if (err) err.textContent = (res && res.error) || 'Deletion failed. Please try again.';
+  if (btn) { btn.disabled = false; btn.textContent = 'Delete'; btn.style.opacity = '1'; }
+  _delAcctCheck();
 }
 
 // Recent errors, on-device. Hidden entirely when there's nothing to report so

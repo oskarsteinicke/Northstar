@@ -204,6 +204,50 @@ async function authSignOut() {
   location.reload();
 }
 
+// ── ACCOUNT DELETION ──────────────────────────────────────────────────────
+const _ACCOUNT_WORKER = 'https://arete-ai.oskarsteinicke.workers.dev';
+
+// Everything Arete owns on this device. Broader than SYNC_KEYS on purpose:
+// sign-out keeps local extras, deletion should not.
+function wipeLocalData() {
+  try {
+    // Collect first: removing while iterating shifts the indices and would
+    // silently skip half the keys.
+    const doomed = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf('hvi_') === 0) doomed.push(k);
+    }
+    doomed.forEach(k => localStorage.removeItem(k));
+  } catch {}
+}
+
+// Server deletes the account; the client only wipes once that succeeds, so a
+// failure can never leave someone signed out of an account that still exists.
+async function deleteAccount() {
+  const uid = getCurrentUserId();
+  if (!uid || !getAccessToken()) return { error: 'You are not signed in.' };
+  if (!navigator.onLine) return { error: 'You appear to be offline. Reconnect and try again.' };
+  try {
+    await _ensureFreshToken();
+    const res = await fetch(`${_ACCOUNT_WORKER}/account/delete`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${getAccessToken()}` },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401) return { error: 'Your session expired. Sign in again, then retry.' };
+    if (!res.ok || !data.ok) {
+      reportError('account-delete', data.error || ('HTTP ' + res.status));
+      return { error: data.error || 'Deletion failed. Nothing was removed — please try again.' };
+    }
+    track('account_deleted');
+    return { ok: true };
+  } catch (e) {
+    reportError('account-delete', e);
+    return { error: 'Network error. Nothing was deleted — please try again.' };
+  }
+}
+
 // ── SYNC HELPERS ──────────────────────────────────────────────────────────
 let _syncDebounce = null;
 
