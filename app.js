@@ -155,7 +155,18 @@ async function authSignUp(email, password, name) {
     headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
-  return await res.json();
+  const data = await res.json().catch(() => ({}));
+  // GoTrue reports failures as { code, error_code, msg } — there is no `error`
+  // property. Callers used to test for one, so every failed signup looked like
+  // a success and fell through to a confusing sign-in error. Normalise here.
+  if (!res.ok || (!data.access_token && !data.user)) {
+    return {
+      ok: false,
+      code: data.error_code || '',
+      error: data.msg || data.error_description || data.message || 'Sign up failed.',
+    };
+  }
+  return { ok: true, data };
 }
 
 async function authSignIn(email, password) {
@@ -567,6 +578,10 @@ async function forceSync() {
 
 // ── AUTH UI ───────────────────────────────────────────────────────────────
 let _authMode = 'signin'; // 'signin' | 'signup'
+// Message to show on the next auth render, e.g. after bouncing a duplicate
+// signup over to sign-in. Cleared once shown.
+let _authNotice = null;
+let _authPrefillEmail = '';
 
 function injectAuthStyles() {
   if (document.getElementById('auth-styles')) return;
@@ -607,10 +622,10 @@ function renderAuth() {
     <div class="auth-sub">${isSignIn ? 'Sign in to continue your pursuit of arete.' : 'Create your account and pursue daily excellence.'}</div>
     <div style="width:100%;max-width:360px">
       ${!isSignIn ? `<input class="auth-input" type="text" id="auth-name" placeholder="First name" autocomplete="given-name" value="${esc(userName())}" onkeydown="if(event.key==='Enter')submitAuth()">` : ''}
-      <input class="auth-input" type="email" id="auth-email" placeholder="Email address" autocomplete="email">
+      <input class="auth-input" type="email" id="auth-email" placeholder="Email address" autocomplete="email" value="${esc(_authPrefillEmail)}">
       <input class="auth-input" type="password" id="auth-password" placeholder="Password" autocomplete="${isSignIn ? 'current-password' : 'new-password'}" onkeydown="if(event.key==='Enter')submitAuth()">
       ${!isSignIn ? `<input class="auth-input" type="password" id="auth-confirm" placeholder="Confirm password" onkeydown="if(event.key==='Enter')submitAuth()">` : ''}
-      <div class="auth-error" id="auth-error"></div>
+      <div class="auth-error" id="auth-error"${_authNotice && _authNotice.ok ? ' style="color:#6fd48e"' : ''}>${_authNotice ? esc(_authNotice.text) : ''}</div>
       <button class="auth-btn" id="auth-btn" onclick="submitAuth()">${isSignIn ? 'SIGN IN' : 'CREATE ACCOUNT'}</button>
       <div class="auth-switch">
         ${isSignIn ? `Don't have an account? <span onclick="_authMode='signup';renderAuth()">Sign up</span>` : `Already have an account? <span onclick="_authMode='signin';renderAuth()">Sign in</span>`}
@@ -618,6 +633,9 @@ function renderAuth() {
       ${isSignIn ? `<div class="auth-switch" style="margin-top:10px"><span onclick="handleForgotPassword()" style="color:var(--text-dim);font-weight:400">Forgot password?</span></div>` : ''}
       ${(LS.get('hvi_habits', null) || localStorage.getItem('hvi_onboarded')) ? `<div class="auth-switch" style="margin-top:16px"><span onclick="closeAuth()" style="color:var(--text-dim);font-weight:400">Maybe later — keep using the app</span></div>` : ''}
     </div>`;
+  // One-shot: don't let a notice linger across later renders
+  _authNotice = null;
+  _authPrefillEmail = '';
 }
 
 function closeAuth() { document.getElementById('auth-overlay')?.remove(); }
@@ -643,7 +661,20 @@ async function submitAuth() {
     const firstName = document.getElementById('auth-name')?.value?.trim();
     if (!firstName) { errEl.textContent = 'Please enter your first name.'; btn.disabled = false; btn.textContent = 'CREATE ACCOUNT'; return; }
     const res = await authSignUp(email, password, firstName);
-    if (res.error) { errEl.textContent = res.error.message || 'Sign up failed.'; btn.disabled = false; btn.textContent = 'CREATE ACCOUNT'; return; }
+    if (!res.ok) {
+      // Already registered is the common case, and the useful answer is to send
+      // them to sign in with their email kept, not to show a raw API string.
+      if (res.code === 'user_already_exists' || /already registered/i.test(res.error)) {
+        _authMode = 'signin';
+        _authNotice = { text: 'You already have an account — sign in below.', ok: true };
+        _authPrefillEmail = email;
+        renderAuth();
+        return;
+      }
+      errEl.textContent = res.error;
+      btn.disabled = false; btn.textContent = 'CREATE ACCOUNT';
+      return;
+    }
     localStorage.setItem('hvi_user_name', firstName);
     track('sign_up', { method: 'email' });
     // Fire welcome webhook (server-side via Worker; non-blocking, never breaks signup)
@@ -655,9 +686,14 @@ async function submitAuth() {
   const result = await authSignIn(email, password);
   if (!result.ok) {
     const msg = result.error || '';
-    if (msg.toLowerCase().includes('email not confirmed') || msg.toLowerCase().includes('not confirmed')) {
+    const low = msg.toLowerCase();
+    if (low.includes('not confirmed')) {
       errEl.style.color = '#6fd48e';
       errEl.textContent = 'Account created! Check your inbox to confirm your email, then sign in.';
+    } else if (low.includes('invalid login credentials')) {
+      // The API can't say which is wrong, but "invalid credentials" reads like
+      // a system fault to most people. Name both possibilities instead.
+      errEl.textContent = 'That email and password don\'t match. Check them, use "Forgot password?", or tap Sign up if you\'re new.';
     } else {
       errEl.textContent = msg || 'Sign in failed.';
     }
