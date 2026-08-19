@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <rect width="192" height="192" rx="42" fill="#141416"/>
+  <g transform="translate(96 96) rotate(0)">
+    <rect x="-22" y="-58" width="44" height="116" rx="22" fill="#f2efe9"/>
+    <clipPath id="pole"><rect x="-22" y="-58" width="44" height="116" rx="22"/></clipPath>
+    <g clip-path="url(#pole)">
+      <g transform="rotate(-30)">
+        <rect x="-70" y="-96" width="16" height="240" fill="#d94f45" transform="translate(0 0)"/>
+        <rect x="-38" y="-96" width="16" height="240" fill="#4a7bd9"/>
+        <rect x="-6" y="-96" width="16" height="240" fill="#d94f45"/>
+        <rect x="26" y="-96" width="16" height="240" fill="#4a7bd9"/>
+        <rect x="58" y="-96" width="16" height="240" fill="#d94f45"/>
+      </g>
+    </g>
+    <rect x="-30" y="-72" width="60" height="18" rx="7" fill="#d9a441"/>
+    <rect x="-30" y="54" width="60" height="18" rx="7" fill="#d9a441"/>
+  </g>
+</svg>
