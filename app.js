@@ -6,6 +6,19 @@
 function track(event, params) {
   if (typeof gtag === 'function') gtag('event', event, params || {});
 }
+
+// Every event above fires only on success, so a broken step showed up as
+// "fewer signups" with no reason attached — which is exactly how a signup bug
+// stayed invisible for months. Failures get their own event, carrying a short
+// reason code and never any user content.
+function trackFail(step, reason) {
+  try {
+    track('failure', {
+      step: String(step || 'unknown').slice(0, 40),
+      reason: String(reason || 'unknown').slice(0, 80),
+    });
+  } catch {}
+}
 // Capture UTM params on first visit
 (function() {
   const p = new URLSearchParams(location.search);
@@ -429,6 +442,7 @@ async function cloudPull() {
     });
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
+      trackFail('sync_pull', 'http_' + res.status);
       console.warn('[sync] pull failed:', res.status, errText);
       _syncToast('⚠️ Pull failed: ' + res.status);
       if (res.status === 401) { const ok = await authRefresh(); if (ok) return cloudPull(); }
@@ -664,6 +678,7 @@ async function submitAuth() {
     if (!res.ok) {
       // Already registered is the common case, and the useful answer is to send
       // them to sign in with their email kept, not to show a raw API string.
+      trackFail('signup', res.code || res.error);
       if (res.code === 'user_already_exists' || /already registered/i.test(res.error)) {
         _authMode = 'signin';
         _authNotice = { text: 'You already have an account — sign in below.', ok: true };
@@ -687,6 +702,7 @@ async function submitAuth() {
   if (!result.ok) {
     const msg = result.error || '';
     const low = msg.toLowerCase();
+    trackFail('signin', low.includes('invalid login credentials') ? 'invalid_credentials' : msg);
     if (low.includes('not confirmed')) {
       errEl.style.color = '#6fd48e';
       errEl.textContent = 'Account created! Check your inbox to confirm your email, then sign in.';
@@ -1399,7 +1415,11 @@ async function init() {
   refreshPushSubscription();
 
   if (!LS.get('hvi_onboarded', false)) {
+    // Don't handle an invite link yet: it would navigate underneath the
+    // onboarding overlay and be replaced by home the moment onboarding ends.
+    // obFinish() picks it up instead.
     renderOnboarding(0);
+    return;
   } else {
     (() => {
       const validViews = ['home','pillar','habits','habitCreate','stats','progressPhotos','workout','workoutPicker','workoutActive','workoutHistory','workoutProgress','workoutBuilder','exerciseBrowser','diet','dietAddMeal','dietRecipes','dietRecipeDetail','dietGoals','dietTrend','dietTDEE','library','calendar','sleep','challenges','goals','character','leaderboard'];

@@ -1665,6 +1665,11 @@ function rotQ(dir) {
 // ══════════════════════════════════════════════════════════════════════════
 // ONBOARDING
 // ══════════════════════════════════════════════════════════════════════════
+// Step 3 (which path they care about) and step 5 (nutrition goal) used to
+// share _obGoalType. Step 5 overwrote step 3, so the path answer was thrown
+// away — and picking one on step 3 left step 5 with no goal highlighted even
+// though its macro fields were prefilled.
+let _obPath = 'all';
 let _obGoalType = 'maintain';
 let _obCalories = 2500;
 let _obProtein = 180;
@@ -1766,7 +1771,7 @@ function renderOnboarding(step) {
       {k:'all', emoji:'\u{1F3DB}', name:'Pursue arete', desc:'The complete path to excellence', full:true},
     ];
     const cards = goals.map(g => `
-      <div class="ob-goal-card${_obGoalType===g.k?' active':''} ${g.full?'full':''}" onclick="_obGoalType='${g.k}';renderOnboarding(3)">
+      <div class="ob-goal-card${_obPath===g.k?' active':''} ${g.full?'full':''}" onclick="_obPath='${g.k}';renderOnboarding(3)">
         <div class="ob-goal-emoji">${g.emoji}</div>
         <div class="ob-goal-name">${g.name}</div>
         <div class="ob-goal-desc">${g.desc}</div>
@@ -1818,6 +1823,9 @@ function renderOnboarding(step) {
       <div class="ob-step-dots">${dots}</div>
       ${content}
       <button class="ob-btn" onclick="obNext(${step})">${isLast ? 'START MY JOURNEY \u2192' : 'CONTINUE \u2192'}</button>
+      <div style="text-align:center;margin-top:14px">
+        <span onclick="obSkip()" style="font-size:12px;color:var(--text-muted);cursor:pointer">Skip setup \u2014 I'll do this later</span>
+      </div>
     </div>`;
 }
 
@@ -1832,6 +1840,12 @@ function obNext(step) {
     if (!tdeeProfile) tdeeProfile = {};
     tdeeProfile.sex = _obGender;
     LS.set('hvi_tdee_profile', tdeeProfile);
+  }
+  if (step === 3) {
+    // Keep the chosen path — the question used to have no effect at all
+    try {
+      if (typeof meta === 'object' && meta) { meta.path = _obPath; LS.set('hvi_meta', meta); }
+    } catch {}
   }
   if (step === 4) {
     // Save workout program selection
@@ -1858,7 +1872,10 @@ function obFinish() {
 
   // Mark onboarded
   LS.set('hvi_onboarded', true);
-  if (typeof track === 'function') track('onboarding_complete');
+  // Report the answers so it's visible what new users actually come for
+  if (typeof track === 'function') {
+    track('onboarding_complete', { path: _obPath, program: _obProgram, nutrition: nutritionGoalType });
+  }
 
   // Remove overlay
   const overlay = document.getElementById('ob-overlay');
@@ -1871,8 +1888,17 @@ function obFinish() {
   launchConfetti(0.4);
   go('home', {}, false);
 
-  // Show feature tour after a short delay
-  setTimeout(() => showFeatureTour(), 1200);
+  // An invite link is deferred until here, so someone arriving from a shared
+  // group link actually lands on the invite instead of a generic home screen.
+  const invited = _hasPendingJoin();
+  if (invited && typeof _handlePendingJoin === 'function') _handlePendingJoin();
+
+  // Show feature tour after a short delay — but not on top of an invite
+  if (!invited) setTimeout(() => showFeatureTour(), 1200);
+}
+
+function _hasPendingJoin() {
+  try { return !!localStorage.getItem('hvi_pending_join'); } catch { return false; }
 }
 
 function obSkip() {
@@ -1880,6 +1906,7 @@ function obSkip() {
   const overlay = document.getElementById('ob-overlay');
   if (overlay) overlay.remove();
   go('home', {}, false);
+  if (_hasPendingJoin() && typeof _handlePendingJoin === 'function') _handlePendingJoin();
 }
 
 // ── FEATURE TOUR (shown once after onboarding) ─────────────────────────

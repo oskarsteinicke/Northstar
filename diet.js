@@ -861,7 +861,9 @@ async function _macrosForFood(text) {
         return _mergeToOneItem(items, text);
       }
     }
-  } catch (e) { /* fall through to the local database */ }
+  } catch (e) {
+    if (typeof trackFail === 'function') trackFail('macro_estimate', e && e.message);
+  }
 
   const local = _localFoodLookup(text);
   if (local && local.length) return _mergeToOneItem(local, text);
@@ -1056,6 +1058,7 @@ async function handleFoodPhoto(input) {
     const jsonStr = _extractJsonArray(clean);
 
     if (!jsonStr) {
+      if (typeof trackFail === 'function') trackFail('photo_scan', 'no_json');
       if (out) out.innerHTML = `<p class="dm-hint dm-warn">Could not identify food. Try a clearer photo or describe it instead.</p>`;
       return;
     }
