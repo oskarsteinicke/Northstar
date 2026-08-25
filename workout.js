@@ -1333,15 +1333,16 @@ function _wpRelStrength() {
 // rather than by opacity: the previous scale varied alpha over a dark ground,
 // so the middle tiers landed within a few points of each other and were
 // effectively indistinguishable on a phone.
-// Gold is the reward colour in Arete, so it is reserved for the strongest end
-// and weak groups wash out to pale cream instead. Untrained stays neutral dark
-// so "nothing logged" never competes with "trained a little".
+// Gold is the reward colour in Arete, so the strongest end gets full gold and
+// weak groups wash out towards a muted sand.
 //
-// The steps separate on saturation rather than brightness: the low end is
-// almost desaturated, the top is full gold. Ordering it the other way round —
-// dark for weak, near-white for strong — made the palest tone read as the
-// achievement, which is backwards for this palette.
-const _WP_RAMP = ['#17171a', '#f5ead7', '#eddbb2', '#e0c281', '#d4a949', '#c8901a'];
+// "Pale" here means desaturated, not bright. An earlier version made the weak
+// end near-white cream, which on a black ground was louder than the gold — the
+// eye went straight to the weakest muscles. Saturation AND brightness now both
+// climb with strength, so gold is the most prominent thing on the figure.
+// Untrained stays neutral dark so "nothing logged" never competes with
+// "trained a little".
+const _WP_RAMP = ['#17171a', '#57503f', '#7d7050', '#a68f52', '#cbaa48', '#f0c23a'];
 
 const _WP_TIERS = [
   { min: 0,   name: 'Untrained',    color: _WP_RAMP[0] },
