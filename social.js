@@ -767,6 +767,8 @@ function _challengeProgress(challenge) {
   const end = challenge.endDate;
   const t = today();
   let count = 0;
+  // Read once rather than per habit per day
+  const hist = LS.get('hvi_habit_history', {}) || {};
 
   for (let i = 0; i < challenge.duration; i++) {
     const d = new Date(start + 'T00:00:00');
@@ -777,12 +779,12 @@ function _challengeProgress(challenge) {
     switch (challenge.metric) {
       case 'perfect_days': {
         const isToday = date === t;
-        const allDone = isToday
+        // This checked whether ANY habit had history on the date, which is the
+        // same test for every habit — so every() passed as soon as one habit
+        // was done, and any day with a single completion counted as perfect.
+        const allDone = habits.length > 0 && (isToday
           ? habits.every(h => log[h.id]?.completedToday)
-          : habits.every(h => {
-              const hist = LS.get('hvi_habit_history', {});
-              return Object.values(hist).some(arr => arr.includes(date));
-            });
+          : habits.every(h => (hist[h.id] || []).includes(date)));
         if (allDone) count++;
         break;
       }

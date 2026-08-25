@@ -1735,14 +1735,22 @@ function calculateTDEE() {
         <div class="tp-macro-card"><div class="tp-macro-val" style="color:var(--fat)">${fat_g}g</div><div class="tp-macro-lbl">Fat</div></div>
       </div>
     </div>
-    <button class="w-finish" onclick="applyTDEEGoals(${target},${protein_g},${carbs_g},${fat_g})">APPLY TO GOALS</button>
+    <button class="w-finish" onclick="applyTDEEGoals(${target},${protein_g},${carbs_g},${fat_g},'${_tdeeGoal}')">APPLY TO GOALS</button>
     <div id="tdee-confirm"></div>`;
 
   resEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-function applyTDEEGoals(cal, p, c, f) {
+// The calculator offers five goals; the rest of the app tracks three. Applying
+// used to set the macro targets and leave goalType untouched, so choosing a
+// mild cut set a deficit while the Diet screen still read MAINTAIN — and the
+// adaptive recommendation, which reads goalType, then suggested eating back up
+// to maintenance.
+const _TDEE_GOAL_MAP = { cut: 'cut', cut_mild: 'cut', maintain: 'maintain', bulk_lean: 'bulk', bulk: 'bulk' };
+
+function applyTDEEGoals(cal, p, c, f, goal) {
   dietMeta.dailyGoals = { calories: cal, protein: p, carbs: c, fat: f };
+  if (goal && _TDEE_GOAL_MAP[goal]) dietMeta.goalType = _TDEE_GOAL_MAP[goal];
   LS.set('hvi_diet_meta', dietMeta);
   const el = document.getElementById('tdee-confirm');
   if (el) {
