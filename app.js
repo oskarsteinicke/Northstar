@@ -155,7 +155,13 @@ function sendWelcomeWebhook(name, email) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: name || '', email: email || '' }),
-    }).catch(() => {});
+    })
+      // The response used to be discarded entirely, so a workflow left on its
+      // n8n test URL dropped every real signup with nothing to show for it.
+      // Still never blocks or fails signup — it only makes the failure visible.
+      .then(r => r.json().catch(() => ({})))
+      .then(d => { if (d && d.ok === false) trackFail('welcome_webhook', d.reason || 'unknown'); })
+      .catch(() => {});
   } catch {}
 }
 

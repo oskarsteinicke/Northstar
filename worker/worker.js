@@ -554,22 +554,47 @@ async function handleStripeWebhook(request, env) {
 
 // Forward a new signup to the n8n welcome webhook. Server-side so the URL stays
 // secret. Always returns 200 to the client; a webhook failure never breaks signup.
+// n8n test URLs only accept a request while the editor is actively listening,
+// so a workflow left on its test URL silently drops every real signup.
+function _isN8nTestUrl(url) { return /\/webhook-test\//.test(url || ''); }
+
 async function handleWelcome(body, env, origin) {
   const { name, email } = body || {};
-  if (!env.N8N_WELCOME_WEBHOOK_URL) {
-    return jsonResponse({ ok: false, skipped: 'webhook not configured' }, 200, origin);
+  const url = env.N8N_WELCOME_WEBHOOK_URL;
+  if (!url) {
+    return jsonResponse({ ok: false, reason: 'not_configured' }, 200, origin);
   }
   try {
-    const res = await fetch(env.N8N_WELCOME_WEBHOOK_URL, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: name || '', email: email || '' }),
     });
-    return jsonResponse({ ok: res.ok }, 200, origin);
+    // Report the upstream status: {ok:false} alone gave no way to tell a
+    // not-listening test webhook from a genuinely broken workflow.
+    return jsonResponse({
+      ok: res.ok,
+      status: res.status,
+      reason: res.ok ? undefined : (_isN8nTestUrl(url) ? 'test_url_not_listening' : 'upstream_error'),
+    }, 200, origin);
   } catch (e) {
     console.warn('[welcome] webhook failed:', e);
-    return jsonResponse({ ok: false }, 200, origin);
+    return jsonResponse({ ok: false, reason: 'unreachable' }, 200, origin);
   }
+}
+
+// Configuration check that never fires the webhook, so it is safe to call at
+// any time. Deliberately returns only the host and whether the path looks like
+// a test URL — the full URL is a secret.
+function handleWelcomeStatus(env, origin) {
+  const url = env.N8N_WELCOME_WEBHOOK_URL || '';
+  let host = null;
+  try { host = url ? new URL(url).host : null; } catch {}
+  return jsonResponse({
+    configured: !!url,
+    host,
+    looksLikeTestUrl: _isN8nTestUrl(url),
+  }, 200, origin);
 }
 
 export default {
@@ -587,6 +612,11 @@ export default {
     // Health endpoints accept GET and POST
     if (path === '/health') {
       return handleHealth(request, env, origin);
+    }
+
+    // Welcome-webhook configuration check (GET, fires nothing)
+    if (path === '/welcome/status') {
+      return handleWelcomeStatus(env, origin);
     }
 
     // Stripe webhook (from Stripe servers — no CORS, raw body)
