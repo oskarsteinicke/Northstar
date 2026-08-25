@@ -215,5 +215,79 @@ function rest(r) {
     r.check('still zero, no side effects', run(s, 'log.h1.streak') === 0);
   }
 
+
+  // Weekly habits count weeks, not days: a missed Tuesday is fine, a week that
+  // never hit the target is not.
+  r.section('weekly habits break after a missed week');
+  {
+    const weekly = [{ id: 'h2', name: 'Gym', schedule: 'weekly', perWeek: 3 }];
+    // Week boundaries match the rest of the app: Sunday start
+    const curStart = (() => { const d = new Date(); d.setDate(d.getDate() - d.getDay()); return d; })();
+    const dayIn = (weeksBack, offset) => {
+      const d = new Date(curStart);
+      d.setDate(d.getDate() - weeksBack * 7 + offset);
+      return d.toLocaleDateString('en-CA');
+    };
+    const lastCompleted = dayIn(1, 1);
+
+    // Hit the target last week -> the streak stands
+    const hit = sb({
+      hvi_habits: JSON.stringify(weekly),
+      hvi_log: JSON.stringify({ h2: { streak: 5, lastCompletedDate: lastCompleted, completedToday: false } }),
+      hvi_meta: '{}',
+      hvi_habit_history: JSON.stringify({ h2: [dayIn(2, 1), dayIn(1, 1), dayIn(1, 3), dayIn(1, 5)] }),
+    });
+    run(hit, 'validateStreaks()');
+    r.check('target met last week keeps the streak', run(hit, 'log.h2.streak') === 5,
+      `(${run(hit, 'log.h2.streak')})`);
+
+    // Only one session last week against a target of three -> broken
+    const missed = sb({
+      hvi_habits: JSON.stringify(weekly),
+      hvi_log: JSON.stringify({ h2: { streak: 5, lastCompletedDate: lastCompleted, completedToday: false } }),
+      hvi_meta: '{}',
+      hvi_habit_history: JSON.stringify({ h2: [dayIn(2, 1), dayIn(1, 1)] }),
+    });
+    run(missed, 'validateStreaks()');
+    r.check('falling short of the target breaks it', run(missed, 'log.h2.streak') === 0,
+      `(${run(missed, 'log.h2.streak')})`);
+
+    // Nothing at all last week -> broken
+    const none = sb({
+      hvi_habits: JSON.stringify(weekly),
+      hvi_log: JSON.stringify({ h2: { streak: 5, lastCompletedDate: dayIn(3, 1), completedToday: false } }),
+      hvi_meta: '{}',
+      hvi_habit_history: JSON.stringify({ h2: [dayIn(3, 1), dayIn(3, 2), dayIn(3, 4)] }),
+    });
+    run(none, 'validateStreaks()');
+    r.check('a blank week breaks it', run(none, 'log.h2.streak') === 0, `(${run(none, 'log.h2.streak')})`);
+  }
+
+  r.section('a brand new weekly habit is not punished');
+  {
+    const weekly = [{ id: 'h2', name: 'Gym', schedule: 'weekly', perWeek: 3 }];
+    const curStart = (() => { const d = new Date(); d.setDate(d.getDate() - d.getDay()); return d; })();
+    const thisWeek = (() => { const d = new Date(curStart); return d.toLocaleDateString('en-CA'); })();
+    const s = sb({
+      hvi_habits: JSON.stringify(weekly),
+      // Created and completed this week only: there is no elapsed week to judge
+      hvi_log: JSON.stringify({ h2: { streak: 1, lastCompletedDate: thisWeek, completedToday: false } }),
+      hvi_meta: '{}',
+      hvi_habit_history: JSON.stringify({ h2: [thisWeek] }),
+    });
+    run(s, 'validateStreaks()');
+    r.check('no prior week means no break', run(s, 'log.h2.streak') === 1, `(${run(s, 'log.h2.streak')})`);
+  }
+
+  r.section('daily habits are unaffected by the weekly rule');
+  {
+    const s = sb({
+      hvi_habits: JSON.stringify(H),
+      hvi_log: JSON.stringify({ h1: { streak: 4, lastCompletedDate: dk(1), completedToday: false } }),
+      hvi_meta: '{}', hvi_habit_history: '{}' });
+    run(s, 'validateStreaks()');
+    r.check('completed yesterday still survives', run(s, 'log.h1.streak') === 4, `(${run(s, 'log.h1.streak')})`);
+  }
+
   return r.finish();
 };

@@ -1562,10 +1562,28 @@ function _wasDueOn(h, key) {
 function validateStreaks() {
   const t = today();
   let changed = false;
+  const hist = LS.get('hvi_habit_history', {}) || {};
   (habits || []).forEach(h => {
     const e = log[h.id];
     if (!e || !(e.streak > 0) || !e.lastCompletedDate) return;
     if (e.lastCompletedDate >= t) return;
+
+    // A weekly habit counts weeks, not days: missing a Tuesday is not a miss,
+    // but failing to hit the target across a whole week is. Only fully elapsed
+    // weeks are judged — the current one is still in progress.
+    if (h.schedule === 'weekly') {
+      const perWeek = h.perWeek || 7;
+      const curStart = new Date(); curStart.setDate(curStart.getDate() - curStart.getDay());
+      const prevStart = new Date(curStart); prevStart.setDate(prevStart.getDate() - 7);
+      const curKey = dateKey(curStart), prevKey = dateKey(prevStart);
+      const days = hist[h.id] || [];
+      // Don't judge a week the habit wasn't being tracked for yet
+      if (!days.some(x => x < curKey)) return;
+      const lastWeek = days.filter(x => x >= prevKey && x < curKey).length;
+      if (lastWeek < perWeek) { e.streak = 0; changed = true; }
+      return;
+    }
+
     const d = new Date(e.lastCompletedDate + 'T12:00');
     for (let i = 0; i < 400; i++) {
       d.setDate(d.getDate() + 1);
