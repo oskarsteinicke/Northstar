@@ -22,6 +22,7 @@ Exit code is non-zero if any check fails, so this works in CI as-is.
 | `onboarding` | onboarding answers persist; invite links reach new users |
 | `premium` | free habit limit, trial window, grandfathering, paywall gating |
 | `push` | VAPID signing verified against the public key, slot windows, dedupe, pruning |
+| `storage` | routine ticks keyed by id, positional-log migration, quota failures surfacing |
 | `telemetry` | error reporting and capping, no user content, failure events, native reminders |
 | `tracking` | warmup handling in volume figures, imported activity names, meal deletion by id |
 | `workout` | mid-session data loss, trained-day detection, estimated 1RM, relative strength, body map |

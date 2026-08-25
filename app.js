@@ -733,9 +733,34 @@ async function handleForgotPassword() {
 }
 
 // ── STORAGE ───────────────────────────────────────────────────────────────
+// Storage is finite — progress photos are base64 and capped at 30, which can
+// approach a typical 5MB origin quota on its own. This used to swallow every
+// error including QuotaExceededError, so once storage filled, saves failed
+// silently: habits ticked, workouts logged, and the lot vanished on reload.
+let _storageFullWarned = false;
+
+function _onStorageFull(key, err) {
+  const quota = err && (err.name === 'QuotaExceededError' ||
+    err.name === 'NS_ERROR_DOM_QUOTA_REACHED' || err.code === 22 || err.code === 1014);
+  if (typeof reportError === 'function') {
+    reportError(quota ? 'storage-full' : 'storage-write', (err && err.name) || 'unknown', { src: key });
+  }
+  if (!quota || _storageFullWarned) return;
+  _storageFullWarned = true;
+  if (typeof trackFail === 'function') trackFail('storage', 'quota_exceeded');
+  const msg = 'Storage is full — recent changes were NOT saved. Free space by deleting progress photos (Profile → Progress Photos).';
+  try {
+    if (typeof _showToast === 'function') _showToast(msg);
+    else if (typeof alert === 'function') alert(msg);
+  } catch {}
+}
+
 const LS = {
   get: (k, fb) => { try { const v = localStorage.getItem(k); return v !== null ? JSON.parse(v) : fb; } catch { return fb; } },
-  set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); schedulePush(); } catch {} },
+  set: (k, v) => {
+    try { localStorage.setItem(k, JSON.stringify(v)); schedulePush(); return true; }
+    catch (e) { _onStorageFull(k, e); return false; }
+  },
 };
 
 // Collision-proof id generator (timestamp + random suffix). Avoids two items
@@ -1318,6 +1343,7 @@ async function init() {
     routines[p] = (routines[p] || []).map(item => typeof item === 'string' ? { name: item } : item);
   });
   routineLog = LS.get('hvi_routine_log', {});
+  _migrateRoutineKeys();
 
   // ── Identify user in GA4 ───────────────────────────────────────────────
   const _sid = getSession();
@@ -2104,6 +2130,55 @@ function renderHabits() {
 // ══════════════════════════════════════════════════════════════════════════
 // RENDER: ROUTINES
 // ══════════════════════════════════════════════════════════════════════════
+// Check-offs used to be keyed by list position (`morning_0`). Deleting an item
+// renumbered only the current day, and reordering renumbered nothing at all, so
+// every past day's ticks were silently re-attributed to whatever moved into
+// that slot. Items now carry a stable id and the log is keyed by it, which
+// makes delete and reorder need no log surgery whatsoever.
+const ROUTINE_PERIODS = ['morning', 'night'];
+
+function _routineId(item, period, idx) {
+  if (item && item.id) return item.id;
+  // Deterministic so a repeated migration maps to the same key
+  return `${period}${idx}_${String((item && item.name) || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12)}`;
+}
+
+function _migrateRoutineKeys() {
+  try {
+    let touched = false;
+    const idAt = {};
+    ROUTINE_PERIODS.forEach(p => {
+      idAt[p] = [];
+      (routines[p] || []).forEach((item, i) => {
+        if (!item.id) { item.id = _routineId(item, p, i); touched = true; }
+        idAt[p][i] = item.id;
+      });
+    });
+    if (touched) LS.set('hvi_routines', routines);
+
+    // Rewrite any positional keys still in the log, on every day, not just today
+    let logTouched = false;
+    Object.keys(routineLog || {}).forEach(day => {
+      const entry = routineLog[day];
+      if (!entry || typeof entry !== 'object') return;
+      const next = {};
+      Object.keys(entry).forEach(k => {
+        const at = k.lastIndexOf('_');
+        const period = k.slice(0, at), rest = k.slice(at + 1);
+        if (ROUTINE_PERIODS.includes(period) && /^\d+$/.test(rest)) {
+          const id = (idAt[period] || [])[parseInt(rest, 10)];
+          if (id) { next[period + '_' + id] = entry[k]; logTouched = true; return; }
+          logTouched = true;          // item is gone: drop the orphaned tick
+          return;
+        }
+        next[k] = entry[k];
+      });
+      routineLog[day] = next;
+    });
+    if (logTouched) LS.set('hvi_routine_log', routineLog);
+  } catch {}
+}
+
 function getRoutineLogToday() {
   const dk = dateKey(new Date());
   if (!routineLog[dk]) routineLog[dk] = {};
@@ -2115,7 +2190,7 @@ function isRoutineItemDone(period, idx) {
   if (!item) return false;
   if (item.habitId && log[item.habitId]) return !!log[item.habitId].completedToday;
   const today = getRoutineLogToday();
-  return !!today[period + '_' + idx];
+  return !!today[period + '_' + _routineId(item, period, idx)];
 }
 
 function toggleRoutineItem(period, idx) {
@@ -2127,7 +2202,7 @@ function toggleRoutineItem(period, idx) {
     return;
   }
   const today = getRoutineLogToday();
-  const key = period + '_' + idx;
+  const key = period + '_' + _routineId(item, period, idx);
   today[key] = !today[key];
   LS.set('hvi_routine_log', routineLog);
   renderHabits();
@@ -2191,6 +2266,7 @@ function addRoutineItem(period) {
   if (!routines[period]) routines[period] = [];
   const matchingHabit = habits.find(h => h.name.toLowerCase() === name.toLowerCase());
   const item = matchingHabit ? { name, habitId: matchingHabit.id } : { name };
+  item.id = `${period}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   routines[period].push(item);
   LS.set('hvi_routines', routines);
   renderHabits();
@@ -2208,19 +2284,20 @@ function moveRoutineItem(period, idx, dir) {
 function deleteRoutineItem(period, idx) {
   const item = routines[period][idx];
   if (!confirm(`Delete "${item.name}"?`)) return;
+  const id = _routineId(item, period, idx);
   routines[period].splice(idx, 1);
   LS.set('hvi_routines', routines);
-  const dk = dateKey(new Date());
-  if (routineLog[dk]) {
-    const newLog = {};
-    Object.keys(routineLog[dk]).forEach(k => {
-      const [p, i] = k.split('_');
-      if (p === period && parseInt(i) > idx) newLog[p + '_' + (parseInt(i) - 1)] = routineLog[dk][k];
-      else if (p !== period || parseInt(i) !== idx) newLog[k] = routineLog[dk][k];
-    });
-    routineLog[dk] = newLog;
-    LS.set('hvi_routine_log', routineLog);
-  }
+  // Ids are stable, so only this item's own ticks need clearing — the rest of
+  // the list, and every past day, are unaffected.
+  let changed = false;
+  Object.keys(routineLog || {}).forEach(day => {
+    const entry = routineLog[day];
+    if (entry && Object.prototype.hasOwnProperty.call(entry, period + '_' + id)) {
+      delete entry[period + '_' + id];
+      changed = true;
+    }
+  });
+  if (changed) LS.set('hvi_routine_log', routineLog);
   renderHabits();
 }
 
