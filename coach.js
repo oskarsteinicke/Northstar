@@ -27,7 +27,7 @@ function buildCoachSystemPrompt() {
   const hist = LS.get('hvi_habit_history', {});
   const weekDays = [...Array(7)].map((_, i) => {
     const dt = new Date(); dt.setDate(dt.getDate() - i);
-    return dt.toISOString().slice(0, 10);
+    return dateKey(dt);
   });
   const weekTotal = weekDays.reduce((s, dd) => {
     if (dd === d) return s + todayDone;

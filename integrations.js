@@ -328,7 +328,7 @@ async function _syncGoogleFit() {
       const start = new Date(parseInt(s.startTimeMillis));
       const end = new Date(parseInt(s.endTimeMillis));
       const hours = ((end - start) / 3600000).toFixed(1);
-      const dateKey = start.toISOString().slice(0, 10);
+      const dateKey = dateKey(start);
       if (!sleepLog[dateKey] || !sleepLog[dateKey].hours) {
         sleepLog[dateKey] = { ...sleepLog[dateKey], hours: parseFloat(hours), source: 'googlefit' };
       }
@@ -348,7 +348,7 @@ async function _syncGoogleFit() {
     (data.session || []).forEach(s => {
       if (s.activityType === 72) return; // skip sleep
       const start = new Date(parseInt(s.startTimeMillis));
-      const dateKey = start.toISOString().slice(0, 10);
+      const dateKey = dateKey(start);
       const duration = Math.round((parseInt(s.endTimeMillis) - parseInt(s.startTimeMillis)) / 60000);
       // Only add if no workout logged that day already
       if (!workoutLog[dateKey]) {
@@ -371,7 +371,7 @@ async function _syncGoogleFit() {
   if (weightRes?.ok) {
     const data = await weightRes.json();
     (data.point || []).forEach(p => {
-      const dateKey = new Date(parseInt(p.startTimeNanos) / 1e6).toISOString().slice(0, 10);
+      const dateKey = dateKey(new Date(parseInt(p.startTimeNanos) / 1e6));
       const kg = p.value?.[0]?.fpVal;
       if (kg && !weightLog[dateKey]) {
         weightLog[dateKey] = parseFloat(kg.toFixed(1));
@@ -414,7 +414,7 @@ async function _syncStrava() {
 // ── FITBIT ───────────────────────────────────────────────────────────────
 async function _syncFitbit() {
   const t = today();
-  const weekAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString().slice(0, 10); })();
+  const weekAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 7); return dateKey(d); })();
 
   // Sleep
   const sleepRes = await _authedFetch('fitbit',

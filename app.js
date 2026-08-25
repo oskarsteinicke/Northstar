@@ -747,6 +747,11 @@ function genId(prefix) {
 // ── DATE ──────────────────────────────────────────────────────────────────
 const today = () => new Date().toLocaleDateString('en-CA');
 const yesterday = () => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toLocaleDateString('en-CA'); };
+// The one way to turn a Date into a storage key. Everything date-keyed —
+// workouts, meals, sleep, weight, routines, habit history — is written in
+// LOCAL time, so toISOString() must never be used for a key: it is UTC, and
+// for anyone west of Greenwich it rolls over to tomorrow during the evening.
+const dateKey = (d) => (d instanceof Date ? d : new Date(d)).toLocaleDateString('en-CA');
 const dayName = () => new Date().toLocaleDateString('en-US', { weekday: 'long' });
 const greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
 const userName = () => localStorage.getItem('hvi_user_name') || '';
@@ -1467,6 +1472,22 @@ function _handlePendingJoin(_tries) {
   }).catch(() => {});
 }
 
+// Add or remove a date from a habit's completion history. Kept in one place so
+// completing, un-completing and the rollover backfill can't drift apart.
+function setHabitHistory(habitId, dateKey, done) {
+  try {
+    const hist = LS.get('hvi_habit_history', {}) || {};
+    const list = hist[habitId] || [];
+    const at = list.indexOf(dateKey);
+    if (done && at < 0) list.push(dateKey);
+    else if (!done && at >= 0) list.splice(at, 1);
+    else return;                       // already in the desired state
+    list.sort();
+    hist[habitId] = list.slice(-60);   // roughly two months is plenty
+    LS.set('hvi_habit_history', hist);
+  } catch {}
+}
+
 function checkReset() {
   const t = today();
   // Always sanitize: clear any completedToday where lastCompletedDate isn't actually today
@@ -1486,13 +1507,10 @@ function checkReset() {
   habits.forEach(h => {
     const e = log[h.id];
     if (e) {
-      // Record completion in history for weekly scheduling
-      if (e.completedToday && meta.lastOpenedDate) {
-        const hist = LS.get('hvi_habit_history') || {};
-        if (!hist[h.id]) hist[h.id] = [];
-        hist[h.id].push(meta.lastOpenedDate);
-        if (hist[h.id].length > 60) hist[h.id] = hist[h.id].slice(-60);
-        LS.set('hvi_habit_history', hist);
+      // Backfill for completions made before history was recorded at tap time,
+      // and for anything a cloud restore brought back. Idempotent.
+      if (e.lastCompletedDate && e.lastCompletedDate !== t) {
+        setHabitHistory(h.id, e.lastCompletedDate, true);
       }
       e.completedToday = false;
       // Only break streak if habit was due yesterday
@@ -1570,11 +1588,17 @@ function isHabitDueToday(h) {
     // Due if completed < perWeek this calendar week
     const perWeek = h.perWeek || 7;
     const now = new Date(), start = new Date(now); start.setDate(now.getDate() - now.getDay());
+    const hist = LS.get('hvi_habit_history', {}) || {};
+    const done = hist[h.id] || [];
     let count = 0;
-    for (let d = new Date(start); d <= now; d.setDate(d.getDate()+1)) {
-      const key = d.toISOString().slice(0,10);
-      if (key === today() && log[h.id]?.completedToday) count++;
-      else if (key !== today()) { /* check history */ const hist = LS.get('hvi_habit_history') || {}; if (hist[h.id]?.includes(key)) count++; }
+    for (let d = new Date(start); d <= now; d.setDate(d.getDate() + 1)) {
+      // Local date key. toISOString() is UTC, so for anyone west of Greenwich
+      // it rolls to tomorrow in the evening: the key never matched today() and
+      // the history lookups were off by a day, so weekly habits stayed "due"
+      // no matter how often they were completed.
+      const key = d.toLocaleDateString('en-CA');
+      if (key === today()) { if (log[h.id]?.completedToday) count++; }
+      else if (done.includes(key)) count++;
     }
     return count < perWeek;
   }
@@ -1624,6 +1648,12 @@ function tapHabit(id, suffix) {
   if (!e.completedToday) { e.streak = e.lastCompletedDate === y ? e.streak + 1 : 1; e.lastCompletedDate = t; e.completedToday = true; }
   else { e.completedToday = false; }
   LS.set('hvi_log', log);
+  // Record the completion here, where it definitely happened. checkReset()
+  // used to be the only writer, but the sanitise pass added above it clears
+  // completedToday first, so its push could never fire and the history stayed
+  // permanently empty — which quietly broke weekly schedules and left the
+  // coach and calendar with nothing to read.
+  setHabitHistory(id, t, e.completedToday);
   const habit = habits.find(h => h.id === id);
   const pillarId = habit ? PILLARS.find(p => p.cats.includes(habit.category))?.id : null;
   if (e.completedToday) {
@@ -1715,7 +1745,7 @@ function renderWeekInReview() {
   for (let i = 0; i < 7; i++) {
     const d = new Date(mon);
     d.setDate(mon.getDate() + i);
-    const key = d.toISOString().slice(0, 10);
+    const key = dateKey(d);
     if (key > today()) break;
     const anyDone = Object.values(hist).some(arr => arr.includes(key));
     if (anyDone) weekHabitDays++;
@@ -1726,7 +1756,7 @@ function renderWeekInReview() {
   for (let i = 0; i < 7; i++) {
     const d = new Date(mon);
     d.setDate(mon.getDate() + i);
-    const key = d.toISOString().slice(0, 10);
+    const key = dateKey(d);
     if (key > today()) break;
     const s = sleepLog[key];
     if (s && s.hours) { sleepTotal += s.hours; sleepCount++; }
@@ -1738,7 +1768,7 @@ function renderWeekInReview() {
   for (let i = 0; i < 7; i++) {
     const d = new Date(mon);
     d.setDate(mon.getDate() + i);
-    const key = d.toISOString().slice(0, 10);
+    const key = dateKey(d);
     if (weightLog[key]) weekWeights.push(weightLog[key]);
   }
   const weightDelta = weekWeights.length >= 2 ? (weekWeights[weekWeights.length - 1] - weekWeights[0]).toFixed(1) : null;
@@ -1749,7 +1779,7 @@ function renderWeekInReview() {
   for (let i = 0; i < 7; i++) {
     const d = new Date(mon);
     d.setDate(mon.getDate() + i);
-    const key = d.toISOString().slice(0, 10);
+    const key = dateKey(d);
     if (key > today()) break;
     if (_sLog[key]) { stepsTotal += _sLog[key]; stepsCount++; }
   }
@@ -1821,7 +1851,7 @@ function renderHome() {
     // Check backwards
     for (let i = 1; i < 365; i++) {
       d.setDate(d.getDate() - 1);
-      const key = d.toISOString().slice(0, 10);
+      const key = dateKey(d);
       const hist = LS.get('hvi_habit_history', {});
       const anyDone = Object.values(hist).some(arr => arr.includes(key));
       if (anyDone) streak++; else break;
@@ -2075,7 +2105,7 @@ function renderHabits() {
 // RENDER: ROUTINES
 // ══════════════════════════════════════════════════════════════════════════
 function getRoutineLogToday() {
-  const dk = new Date().toISOString().slice(0, 10);
+  const dk = dateKey(new Date());
   if (!routineLog[dk]) routineLog[dk] = {};
   return routineLog[dk];
 }
@@ -2180,7 +2210,7 @@ function deleteRoutineItem(period, idx) {
   if (!confirm(`Delete "${item.name}"?`)) return;
   routines[period].splice(idx, 1);
   LS.set('hvi_routines', routines);
-  const dk = new Date().toISOString().slice(0, 10);
+  const dk = dateKey(new Date());
   if (routineLog[dk]) {
     const newLog = {};
     Object.keys(routineLog[dk]).forEach(k => {
@@ -2763,7 +2793,7 @@ function getRecoveryStatus() {
   // Consecutive training days ending today/yesterday
   for (let i = 0; i < 7; i++) {
     const d = new Date(now); d.setDate(d.getDate() - i);
-    const key = d.toISOString().slice(0, 10);
+    const key = dateKey(d);
     if (trainedOnDay(key)) consecutiveDays++;
     else break;
   }

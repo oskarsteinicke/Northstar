@@ -2158,7 +2158,7 @@ function showWeeklyRecap() {
   let sleepT = 0, sleepC = 0;
   for (let i = 0; i < 7; i++) {
     const d = new Date(mon); d.setDate(mon.getDate() + i);
-    const k = d.toISOString().slice(0, 10);
+    const k = dateKey(d);
     if (k > today()) break;
     const s = sleepLog[k];
     if (s && s.hours) { sleepT += s.hours; sleepC++; }
@@ -2170,7 +2170,7 @@ function showWeeklyRecap() {
   let stpT = 0, stpC = 0;
   for (let i = 0; i < 7; i++) {
     const d = new Date(mon); d.setDate(mon.getDate() + i);
-    const k = d.toISOString().slice(0, 10);
+    const k = dateKey(d);
     if (k > today()) break;
     if (sLog[k]) { stpT += sLog[k]; stpC++; }
   }
