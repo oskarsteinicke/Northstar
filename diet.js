@@ -1688,7 +1688,11 @@ function renderDietTDEE() {
 // the person using them. This surfaces the drift and offers a recalculation
 // rather than performing one: silently moving someone's calorie goal is the
 // wrong default, especially downwards.
-const _WEIGHT_DRIFT_KG = 2;
+const _WEIGHT_DRIFT_KG = 1;
+// A 1kg change moves the target by only 12-19 calories depending on activity,
+// so the secondary guard has to sit below that or the weight threshold above
+// would never be reached and lowering it would do nothing.
+const _WEIGHT_DRIFT_MIN_CAL = 10;
 
 function bodyweightDrift() {
   const p = (typeof tdeeProfile !== 'undefined' && tdeeProfile) || null;
@@ -1713,7 +1717,7 @@ function bodyweightDrift() {
   });
   if (!next) return null;
   const current = (dietMeta && dietMeta.dailyGoals) || {};
-  if (Math.abs((current.calories || 0) - next.target) < 25) return null;   // not worth asking
+  if (Math.abs((current.calories || 0) - next.target) < _WEIGHT_DRIFT_MIN_CAL) return null;
 
   return {
     deltaKg,

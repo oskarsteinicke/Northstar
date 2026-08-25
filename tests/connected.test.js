@@ -164,19 +164,31 @@ module.exports = function () {
     r.check('so the prompt does not reappear', run(drifted, 'bodyweightDrift()') === null);
   }
 
-  r.section('small changes are left alone');
+  r.section('the threshold is 1kg, and it actually fires');
   {
-    const s2 = sb({
-      hvi_habits: '[]', hvi_log: '{}',
-      hvi_tdee_profile: JSON.stringify({ age:25, sex:'male', weight_kg:80, height_cm:180,
-                                         activity:'moderate', goal:'maintain' }),
-      hvi_weight_log: JSON.stringify({ [dk(1)]: 81 }),   // 1kg, ordinary fluctuation
-    });
-    run(s2, `tdeeProfile=JSON.parse(localStorage.getItem('hvi_tdee_profile'));
-             weightLog=JSON.parse(localStorage.getItem('hvi_weight_log'));
-             dietMeta={dailyGoals:{calories:2700,protein:200,carbs:270,fat:90},goalType:'maintain'};`);
-    r.check('a 1kg swing does not nag', run(s2, 'bodyweightDrift()') === null);
-    r.check('and renders nothing', run(s2, 'bodyweightDriftHTML()') === '');
+    const mk = (logged) => {
+      const s2 = sb({
+        hvi_habits: '[]', hvi_log: '{}',
+        hvi_tdee_profile: JSON.stringify({ age:25, sex:'male', weight_kg:80, height_cm:180,
+                                           activity:'moderate', goal:'maintain' }),
+        hvi_weight_log: JSON.stringify({ [dk(1)]: logged }),
+      });
+      run(s2, `tdeeProfile=JSON.parse(localStorage.getItem('hvi_tdee_profile'));
+               weightLog=JSON.parse(localStorage.getItem('hvi_weight_log'));
+               dietMeta={dailyGoals:{calories:computeTDEETargets({weightKg:80,heightCm:180,age:25,
+                 sex:'male',activity:'moderate',goal:'maintain'}).target,protein:200,carbs:270,fat:90},
+                 goalType:'maintain'};`);
+      return s2;
+    };
+    // A 1kg change only shifts the target ~15 cal, so the calorie guard has to
+    // sit below that or raising sensitivity here would change nothing.
+    const one = mk(81);
+    r.check('1kg up is surfaced', run(one, 'bodyweightDrift()') !== null, '(suppressed by the calorie guard)');
+    const oneDown = mk(79);
+    r.check('1kg down is surfaced', run(oneDown, 'bodyweightDrift()') !== null);
+    const half = mk(80.4);
+    r.check('half a kilo is still ignored', run(half, 'bodyweightDrift()') === null);
+    r.check('and renders nothing', run(half, 'bodyweightDriftHTML()') === '');
   }
 
   r.section('drift needs a profile to compare against');
