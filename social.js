@@ -174,6 +174,7 @@ function saveJournal() {
   if (journal[t]) Object.keys(journal[t]).forEach(k => { if (!(k in entry)) entry[k] = journal[t][k]; });
   journal[t] = entry;
   LS.set('hvi_journal3', journal);
+  if (window.Arete) window.Arete.emit('journal:saved', {});
   if (typeof track === 'function') track('journal_save', { word_count: Object.values(entry).join(' ').split(/\s+/).filter(Boolean).length });
   if (gamification.journalXPDate !== t && Object.values(journal[t] || {}).some(Boolean)) {
     gamification.journalXPDate = t;
@@ -272,6 +273,7 @@ function saveSleepHours(val) {
   if (!sleepLog[t]) sleepLog[t] = {};
   sleepLog[t].hours = parseFloat(val) || 0;
   LS.set('hvi_sleep_log', sleepLog);
+  if (window.Arete) window.Arete.emit('sleep:logged', { hours: sleepLog[t].hours });
   if (typeof track === 'function') track('sleep_logged', { hours: sleepLog[t].hours });
 }
 function setSleepQuality(q) {

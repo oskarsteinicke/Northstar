@@ -2432,7 +2432,7 @@ function openEditHabit(id) {
         const opt = (val, label) => `<button class="d-type-btn link-btn${curLink===val?' active':''}" data-link="${val}" onclick="_setEditLink(this)">${label}</button>`;
         return `<div class="sec-lbl" style="padding:12px 0 8px">Auto-complete when</div>
       <div class="d-type-row" style="flex-wrap:wrap;gap:6px">
-        ${opt('', 'None')}${opt('workout', icon('activity', 14) + ' Workout done')}${opt('protein', icon('meat', 14) + ' Protein hit')}${opt('calories', icon('flame', 14) + ' Calories hit')}
+        ${opt('', 'None')}${opt('workout', icon('activity', 14) + ' Workout done')}${opt('protein', icon('meat', 14) + ' Protein hit')}${opt('calories', icon('flame', 14) + ' Calories hit')}${opt('sleep', icon('moon', 14) + ' Slept 7h+')}${opt('journal', icon('book', 14) + ' Journalled')}
       </div>
       <div style="font-size:11px;color:var(--text-muted);padding:6px 0 0">This habit ticks itself when the linked action happens, so you never log it twice.</div>`;
       })()}

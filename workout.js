@@ -211,6 +211,8 @@ function renderWorkout() {
       <div class="w-stat-item"><div class="w-stat-val">${stats.prCount}</div><div class="w-stat-lbl">PRs</div></div>
     </div>
 
+    ${typeof trainingAdviceHTML === 'function' ? trainingAdviceHTML() : ''}
+
     <div class="w-day-nav ani">
       <button class="w-day-arrow" onclick="shiftWorkoutDay(-1)">&#8249;</button>
       <div class="w-day-label">Day ${dayIdx + 1} of ${dayCount}</div>

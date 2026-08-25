@@ -14,6 +14,7 @@ Exit code is non-zero if any check fails, so this works in CI as-is.
 |---|---|
 | `smoke` | every script loads; cross-file functions exist; auth screens render |
 | `auth` | signup/sign-in error handling, duplicate accounts, one-shot notices |
+| `connected` | readiness driving training advice, cross-section habit auto-completion |
 | `deletion` | worker authorisation boundary, deletion ordering, both abort paths, the confirm gate |
 | `features` | TDEE targets and goal state, challenge progress metrics |
 | `gamification` | XP curve, levels, achievement idempotence, quest payout, daily score |

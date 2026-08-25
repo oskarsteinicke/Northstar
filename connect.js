@@ -123,6 +123,55 @@ function getReadiness() {
   };
 }
 
+// ── READINESS -> TRAINING ADVICE ──────────────────────────────────────────
+// Readiness is built from sleep, training load, habit adherence and nutrition,
+// but it only ever appeared on the home screen. The workout screen — the one
+// place it should change what you actually do — never saw it. This turns the
+// score into a concrete instruction for today's session, and names the factor
+// holding it back so the advice is actionable rather than mystical.
+function trainingAdvice() {
+  if (!hasReadinessSignal()) return null;
+  const r = getReadiness();
+
+  // The weakest input is what to fix; Whoop is a reading, not something you do
+  const named = { sleep: 'Sleep', load: 'Training load', habits: 'Habits', nutrition: 'Nutrition' };
+  let limiter = null, worst = 1.1;
+  Object.keys(named).forEach(k => {
+    const v = r.factors[k];
+    if (typeof v === 'number' && v < worst) { worst = v; limiter = named[k]; }
+  });
+
+  let headline, detail;
+  if (r.score >= 75) {
+    headline = 'Primed — go heavy';
+    detail = 'Push top sets. A PR attempt is well timed today.';
+  } else if (r.score >= 50) {
+    headline = 'Steady — train as planned';
+    detail = 'Hit your normal loads and rep targets.';
+  } else if (r.score >= 30) {
+    headline = 'Run down — hold intensity, cut volume';
+    detail = 'Keep the weights, drop a set per exercise and stop two reps short.';
+  } else {
+    headline = 'Depleted — deload today';
+    detail = 'Same movements at roughly 60% load. Moving well beats moving heavy.';
+  }
+  if (limiter && worst < 0.65) detail += ` ${limiter} is what is holding this back.`;
+  return { score: r.score, label: r.label, color: readinessColor(r.score), headline, detail };
+}
+
+function trainingAdviceHTML() {
+  const a = trainingAdvice();
+  if (!a) return '';
+  return `<div class="w-advice ani" onclick="go('home')" role="button" tabindex="0"
+      onkeydown="if(event.key==='Enter'){go('home')}" aria-label="Readiness ${a.score} of 100. ${esc(a.headline)}">
+      <div class="w-advice-score" style="color:${a.color};border-color:${a.color}">${a.score}</div>
+      <div class="w-advice-text">
+        <div class="w-advice-head">${esc(a.headline)}</div>
+        <div class="w-advice-detail">${esc(a.detail)}</div>
+      </div>
+    </div>`;
+}
+
 function readinessColor(score) {
   return score >= 75 ? 'var(--accent-b)' : score >= 50 ? 'var(--carb)' : score >= 30 ? '#e0a866' : 'var(--fat)';
 }
@@ -318,8 +367,29 @@ function checkNutritionTriggers() {
   } catch (e) { console.warn('[Arete] nutrition triggers error:', e); }
 }
 
-// Workout completion comes through the bus (emitted by finishWorkout).
+// Sleep and journal are tracked but nothing could react to them, so a
+// "Sleep 7h+" or "Reflect daily" habit still had to be ticked by hand even
+// though the app already knew it had happened.
+function checkSleepTriggers() {
+  try {
+    const sl = (typeof sleepLog !== 'undefined' && sleepLog) ? sleepLog[today()] : null;
+    if (sl && (sl.hours || 0) >= 7) _autoCompleteLinkedHabits('sleep');
+  } catch (e) { console.warn('[Arete] sleep triggers error:', e); }
+}
+
+function checkJournalTriggers() {
+  try {
+    const je = (typeof journal !== 'undefined' && journal) ? journal[today()] : null;
+    if (je && Object.values(je).some(Boolean)) _autoCompleteLinkedHabits('journal');
+  } catch (e) { console.warn('[Arete] journal triggers error:', e); }
+}
+
+// Everything that can complete a linked habit now goes through the bus, so a
+// new integration only has to listen rather than find every write site.
 window.Arete.on('workout:completed', () => _autoCompleteLinkedHabits('workout'));
+window.Arete.on('sleep:logged', checkSleepTriggers);
+window.Arete.on('journal:saved', checkJournalTriggers);
+window.Arete.on('meal:logged', () => { if (typeof checkNutritionTriggers === 'function') checkNutritionTriggers(); });
 
 // ── PHASE 4: PROACTIVE COACH (rule-based local nudges) ───────────────────────
 // Deterministic flags computed on-device from the signals the connected layer

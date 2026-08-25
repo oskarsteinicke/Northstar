@@ -1480,6 +1480,7 @@ function saveMeal() {
   const t = today();
   if (!mealLog[t]) mealLog[t] = { meals: [] };
   mealLog[t].meals.push({ id: genId('m'), name: curMealType, items: [...curMealItems] });
+  if (window.Arete) window.Arete.emit('meal:logged', { meal: curMealType });
   LS.set('hvi_meal_log', mealLog);
   awardXP(15, 'body');
   const _dm = getDayMacros();
