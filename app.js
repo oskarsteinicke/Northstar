@@ -492,8 +492,16 @@ async function cloudPull() {
             if (l.completedToday) { merged[hid] = l; return; }
             // Cloud completedToday only valid if from today
             if (c.completedToday && c.lastCompletedDate === _today) { merged[hid] = c; return; }
-            // Neither has valid completedToday: keep higher streak
-            if ((l.streak || 0) >= (c.streak || 0)) { merged[hid] = l; }
+            // Neither has valid completedToday. Taking the higher streak made
+            // broken streaks immortal: checkReset() would correctly zero one,
+            // then this restored the stale number from the cloud. Prefer the
+            // more recent completion instead, and only fall back to the bigger
+            // streak when both sides last completed on the same day.
+            const lDate = l.lastCompletedDate || '';
+            const cDate = c.lastCompletedDate || '';
+            if (lDate > cDate) { merged[hid] = l; }
+            else if (cDate > lDate) { merged[hid] = { ...c, completedToday: false }; }
+            else if ((l.streak || 0) >= (c.streak || 0)) { merged[hid] = l; }
             else { merged[hid] = { ...c, completedToday: false }; }
           });
           localStorage.setItem(k, JSON.stringify(merged));
@@ -529,6 +537,15 @@ async function cloudPull() {
         localStorage.setItem(k, JSON.stringify(cloud[k]));
       }
     });
+    // Re-check streaks here rather than trusting every caller to remember. The
+    // merge can hand back a streak from another device whose last completion is
+    // days old, and relying on call-site discipline is exactly how a fix ends up
+    // applied in some places and not others.
+    try {
+      habits = LS.get('hvi_habits', habits);
+      log = LS.get('hvi_log', log);
+      validateStreaks();
+    } catch {}
     return true;
   } catch(e) { console.warn('[sync] pull error:', e); return false; }
 }
@@ -1405,6 +1422,9 @@ async function init() {
         habits = LS.get('hvi_habits', habits);
         log = LS.get('hvi_log', log);
         habits.forEach(h => { if (!log[h.id]) log[h.id] = { streak: 0, lastCompletedDate: '', completedToday: false }; });
+        // The merge can still hand back a streak whose last completion is old,
+        // so re-check it against the dates rather than trusting the number.
+        validateStreaks();
         journal = LS.get('hvi_journal3', journal);
         meta = LS.get('hvi_meta', meta);
         workoutLog = LS.get('hvi_workout_log', workoutLog);
@@ -1520,6 +1540,44 @@ function setHabitHistory(habitId, dateKey, done) {
   } catch {}
 }
 
+// Was this habit due on a given day? Weekly habits count completions per week
+// rather than per day, so they are not broken by a single missed day.
+function _wasDueOn(h, key) {
+  if (!h.schedule || h.schedule === 'daily') return true;
+  if (h.schedule === 'specific') {
+    const dow = new Date(key + 'T12:00').getDay();
+    return (h.days || [0, 1, 2, 3, 4, 5, 6]).includes(dow);
+  }
+  return false;
+}
+
+// Break any streak whose last completion is too old. Idempotent, so it can run
+// again after a cloud pull — which matters, because the merge can bring a stale
+// streak back from another device.
+//
+// The old logic only asked whether the habit was due YESTERDAY, so a gap of
+// several days left the streak untouched unless the final day happened to be a
+// due day. It now walks every day since the last completion; one missed due day
+// ends the streak.
+function validateStreaks() {
+  const t = today();
+  let changed = false;
+  (habits || []).forEach(h => {
+    const e = log[h.id];
+    if (!e || !(e.streak > 0) || !e.lastCompletedDate) return;
+    if (e.lastCompletedDate >= t) return;
+    const d = new Date(e.lastCompletedDate + 'T12:00');
+    for (let i = 0; i < 400; i++) {
+      d.setDate(d.getDate() + 1);
+      const key = dateKey(d);
+      if (key >= t) break;               // today has not been missed yet
+      if (_wasDueOn(h, key)) { e.streak = 0; changed = true; break; }
+    }
+  });
+  if (changed) LS.set('hvi_log', log);
+  return changed;
+}
+
 function checkReset() {
   const t = today();
   // Always sanitize: clear any completedToday where lastCompletedDate isn't actually today
@@ -1533,6 +1591,9 @@ function checkReset() {
     }
   });
   if (sanitized) LS.set('hvi_log', log);
+  // Above the once-per-day guard: a pull later in the session can revive a
+  // streak that was already broken, so this has to be re-checkable.
+  validateStreaks();
   if (meta.lastOpenedDate === t) return;
   const allDone = habits.every(h => log[h.id]?.completedToday);
   if (allDone && meta.lastOpenedDate) meta.totalPerfectDays = (meta.totalPerfectDays || 0) + 1;
@@ -1545,12 +1606,6 @@ function checkReset() {
         setHabitHistory(h.id, e.lastCompletedDate, true);
       }
       e.completedToday = false;
-      // Only break streak if habit was due yesterday
-      if (e.streak > 0 && e.lastCompletedDate !== yesterday()) {
-        const wasDueYesterday = !h.schedule || h.schedule === 'daily' ||
-          (h.schedule === 'specific' && (h.days || [0,1,2,3,4,5,6]).includes(new Date(yesterday()).getDay()));
-        if (wasDueYesterday) e.streak = 0;
-      }
     }
   });
 

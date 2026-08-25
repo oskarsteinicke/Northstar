@@ -118,5 +118,102 @@ module.exports = function () {
       run(s2, 'isHabitDueToday(habits[0])') === false, '(today ignored — the UTC key never matched)');
   }
 
+
+  // Reported: a streak survived a week of not logging. checkReset() zeroed it
+  // correctly, then cloudPull()'s "keep higher streak" merge restored the stale
+  // number from the cloud, so the streak was effectively immortal.
+  r.section('a cloud pull cannot revive a broken streak');
+  {
+    const stale = { h1: { streak: 9, lastCompletedDate: dk(5), completedToday: false } };
+    const s = createSandbox({
+      files: FILES,
+      store: {
+        hvi_habits: JSON.stringify(H),
+        hvi_log: JSON.stringify(stale),
+        hvi_meta: JSON.stringify({ lastOpenedDate: dk(5) }),
+        hvi_session: JSON.stringify({ access_token: 't', refresh_token: 'r', user: { id: 'U1' } }),
+      },
+      fetch: url => url.includes('/rest/v1/hvi_data')
+        ? Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([{ data: { hvi_log: stale } }]) })
+        : Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}), text: () => Promise.resolve('') }),
+    });
+    run(s, `settings={}; curView='home'; track=function(){}; go=function(){};
+      playSound=function(){}; awardXP=function(){}; haptic=function(){};
+      maybeAwardStreakShield=function(){}; renderHabits=function(){};
+      setSyncStatus=function(){}; _syncToast=function(){};
+      habits=JSON.parse(localStorage.getItem('hvi_habits'));
+      log=JSON.parse(localStorage.getItem('hvi_log'));
+      meta=JSON.parse(localStorage.getItem('hvi_meta')); workoutMeta={};`);
+    run(s, 'checkReset()');
+    const afterReset = JSON.parse(s.localStorage._d['hvi_log']).h1.streak;
+    r.check('the rollover breaks it', afterReset === 0, `(${afterReset})`);
+    return run(s, 'cloudPull()').then(() => {
+      const after = JSON.parse(s.localStorage._d['hvi_log']).h1.streak;
+      r.check('the pull does not bring it back', after === 0, `(${after} — stale streak restored)`);
+      return rest(r);
+    });
+  }
+}
+
+function rest(r) {
+  // Only "was it due yesterday" was checked before, so a multi-day gap left the
+  // streak intact whenever the final day happened not to be a due day.
+  r.section('a gap of several days breaks the streak');
+  {
+    const s = sb({
+      hvi_habits: JSON.stringify(H),
+      hvi_log: JSON.stringify({ h1: { streak: 12, lastCompletedDate: dk(7), completedToday: false } }),
+      hvi_meta: JSON.stringify({ lastOpenedDate: dk(7) }),
+    });
+    run(s, 'validateStreaks()');
+    r.check('a week away ends it', JSON.parse(s.localStorage._d['hvi_log']).h1.streak === 0,
+      `(${JSON.parse(s.localStorage._d['hvi_log']).h1.streak})`);
+  }
+
+  r.section('an unbroken streak is left alone');
+  {
+    const today = sb({
+      hvi_habits: JSON.stringify(H),
+      hvi_log: JSON.stringify({ h1: { streak: 4, lastCompletedDate: dk(0), completedToday: true } }),
+      hvi_meta: '{}' });
+    run(today, 'validateStreaks()');
+    r.check('completed today survives', JSON.parse(today.localStorage._d['hvi_log'] || '{}').h1?.streak === 4
+      || run(today, 'log.h1.streak') === 4);
+
+    const yest = sb({
+      hvi_habits: JSON.stringify(H),
+      hvi_log: JSON.stringify({ h1: { streak: 4, lastCompletedDate: dk(1), completedToday: false } }),
+      hvi_meta: '{}' });
+    run(yest, 'validateStreaks()');
+    r.check('completed yesterday survives', run(yest, 'log.h1.streak') === 4, `(${run(yest,'log.h1.streak')})`);
+  }
+
+  r.section('scheduled habits only break on days they were due');
+  {
+    // Due Mondays only. Missing a Tuesday must not end the streak.
+    const monOnly = [{ id: 'h1', name: 'Long run', schedule: 'specific', days: [1] }];
+    const lastMon = (() => { const d = new Date();
+      while (d.getDay() !== 1) d.setDate(d.getDate() - 1); return d.toLocaleDateString('en-CA'); })();
+    const s = sb({
+      hvi_habits: JSON.stringify(monOnly),
+      hvi_log: JSON.stringify({ h1: { streak: 3, lastCompletedDate: lastMon, completedToday: false } }),
+      hvi_meta: '{}' });
+    run(s, 'validateStreaks()');
+    const kept = run(s, 'log.h1.streak');
+    const daysSince = Math.round((new Date(new Date().toDateString()) - new Date(lastMon + 'T12:00')) / 86400000);
+    r.check('non-due days do not break it', daysSince < 7 ? kept === 3 : kept === 0,
+      `(streak ${kept}, ${daysSince}d since the last Monday)`);
+  }
+
+  r.section('validation is idempotent');
+  {
+    const s = sb({
+      hvi_habits: JSON.stringify(H),
+      hvi_log: JSON.stringify({ h1: { streak: 6, lastCompletedDate: dk(4), completedToday: false } }),
+      hvi_meta: '{}' });
+    run(s, 'validateStreaks(); validateStreaks(); validateStreaks();');
+    r.check('still zero, no side effects', run(s, 'log.h1.streak') === 0);
+  }
+
   return r.finish();
 };
