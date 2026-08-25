@@ -14,7 +14,16 @@ Exit code is non-zero if any check fails, so this works in CI as-is.
 |---|---|
 | `smoke` | every script loads; cross-file functions exist; auth screens render |
 | `auth` | signup/sign-in error handling, duplicate accounts, one-shot notices |
+| `deletion` | worker authorisation boundary, deletion ordering, both abort paths, the confirm gate |
+| `diet` | meal editing per section, macro re-estimation on rename, imported weight units |
+| `habits` | completion history, rollover backfill, streak breaks, local date keys, weekly schedules |
+| `integrations` | imported weight units, sync paths run, local date attribution |
 | `onboarding` | onboarding answers persist; invite links reach new users |
+| `premium` | free habit limit, trial window, grandfathering, paywall gating |
+| `push` | VAPID signing verified against the public key, slot windows, dedupe, pruning |
+| `telemetry` | error reporting and capping, no user content, failure events, native reminders |
+| `tracking` | warmup handling in volume figures, imported activity names, meal deletion by id |
+| `workout` | mid-session data loss, trained-day detection, estimated 1RM, relative strength, body map |
 
 Add a suite by dropping in `<name>.test.js` that exports a function (sync or
 async) returning the number of failed checks. `harness.js` provides
