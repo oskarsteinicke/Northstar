@@ -132,5 +132,75 @@ module.exports = function () {
     r.check('the streak advances once', run(s, 'log.h1.streak') === after, `(${after} -> ${run(s,'log.h1.streak')})`);
   }
 
+
+  // BMR is driven by bodyweight, so targets set months ago stop matching the
+  // person using them.
+  r.section('bodyweight drift offers new targets');
+  {
+    const profile = { age: 25, sex: 'male', weight_kg: 90, height_cm: 180,
+                      activity: 'moderate', goal: 'cut' };
+    const drifted = sb({
+      hvi_habits: '[]', hvi_log: '{}',
+      hvi_tdee_profile: JSON.stringify(profile),
+      hvi_weight_log: JSON.stringify({ [dk(1)]: 82 }),   // 8kg down
+    });
+    run(drifted, `tdeeProfile=JSON.parse(localStorage.getItem('hvi_tdee_profile'));
+                  weightLog=JSON.parse(localStorage.getItem('hvi_weight_log'));
+                  dietMeta={dailyGoals:{calories:2400,protein:210,carbs:210,fat:80},goalType:'cut'};`);
+    const d = JSON.parse(run(drifted, 'JSON.stringify(bodyweightDrift())') || 'null');
+    r.check('drift detected', !!d, '(none)');
+    r.check('reports the direction', d.deltaKg < 0, `(${d.deltaKg})`);
+    r.check('a lighter person needs fewer calories', d.next.target < d.current,
+      `(${d.next.target} vs ${d.current})`);
+    r.check('it is offered, not applied', run(drifted, 'dietMeta.dailyGoals.calories') === 2400);
+    r.check('the prompt renders', /dw-drift/.test(run(drifted, 'bodyweightDriftHTML()') || ''));
+
+    run(drifted, 'applyBodyweightDrift()');
+    r.check('applying updates the targets', run(drifted, 'dietMeta.dailyGoals.calories') === d.next.target,
+      `(${run(drifted, 'dietMeta.dailyGoals.calories')})`);
+    r.check('macros move with it', run(drifted, 'dietMeta.dailyGoals.protein') === d.next.protein);
+    r.check('the profile is brought in step', Math.abs(run(drifted, 'tdeeProfile.weight_kg') - 82) < 0.2,
+      `(${run(drifted, 'tdeeProfile.weight_kg')})`);
+    r.check('so the prompt does not reappear', run(drifted, 'bodyweightDrift()') === null);
+  }
+
+  r.section('small changes are left alone');
+  {
+    const s2 = sb({
+      hvi_habits: '[]', hvi_log: '{}',
+      hvi_tdee_profile: JSON.stringify({ age:25, sex:'male', weight_kg:80, height_cm:180,
+                                         activity:'moderate', goal:'maintain' }),
+      hvi_weight_log: JSON.stringify({ [dk(1)]: 81 }),   // 1kg, ordinary fluctuation
+    });
+    run(s2, `tdeeProfile=JSON.parse(localStorage.getItem('hvi_tdee_profile'));
+             weightLog=JSON.parse(localStorage.getItem('hvi_weight_log'));
+             dietMeta={dailyGoals:{calories:2700,protein:200,carbs:270,fat:90},goalType:'maintain'};`);
+    r.check('a 1kg swing does not nag', run(s2, 'bodyweightDrift()') === null);
+    r.check('and renders nothing', run(s2, 'bodyweightDriftHTML()') === '');
+  }
+
+  r.section('drift needs a profile to compare against');
+  {
+    const s3 = sb({ hvi_habits: '[]', hvi_log: '{}',
+      hvi_weight_log: JSON.stringify({ [dk(1)]: 82 }) });
+    run(s3, `tdeeProfile=null; weightLog=JSON.parse(localStorage.getItem('hvi_weight_log'));
+             dietMeta={dailyGoals:{calories:2500}};`);
+    r.check('no profile means no prompt', run(s3, 'bodyweightDrift()') === null);
+  }
+
+  r.section('the shared formula is used by both paths');
+  {
+    const s4 = sb({ hvi_habits: '[]', hvi_log: '{}' });
+    const t = JSON.parse(run(s4, `JSON.stringify(computeTDEETargets({
+      weightKg: 80, heightCm: 180, age: 25, sex: 'male', activity: 'moderate', goal: 'maintain' }))`) || 'null');
+    r.check('reference BMR is 1805', t.bmr === 1805, `(${t.bmr})`);
+    r.check('TDEE applies the activity multiplier', t.tdee === Math.round(1805 * 1.55), `(${t.tdee})`);
+    r.check('maintain adds no offset', t.target === t.tdee);
+    r.check('macros roughly reconstruct the target',
+      Math.abs((t.protein*4 + t.carbs*4 + t.fat*9) - t.target) < 12,
+      `(${t.protein*4 + t.carbs*4 + t.fat*9} vs ${t.target})`);
+    r.check('rubbish input returns nothing', run(s4, "computeTDEETargets({weightKg:0})") === null);
+  }
+
   return r.finish();
 };

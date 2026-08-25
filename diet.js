@@ -444,6 +444,10 @@ function injectAdaptiveStyles() {
     .dw-input{flex:1;padding:10px 12px;border:1px solid rgba(255,255,255,0.08);border-radius:10px;background:var(--surface);color:var(--text);font-size:14px}
     .dw-log-btn{padding:10px 18px;border:none;border-radius:10px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer}
     .dw-log-btn:active{transform:scale(0.97)}
+    .dw-drift{margin-top:12px;padding:12px 14px;background:rgba(176,132,72,0.08);border:1px solid rgba(217,180,106,0.28);border-radius:12px}
+    .dw-drift-text{font-size:12px;line-height:1.5;color:var(--text-dim)}
+    .dw-drift-text strong{color:var(--text)}
+    .dw-drift-arrow{color:var(--accent-b);font-weight:700}
     .dw-history{margin-top:10px;font-size:12px;color:var(--text-dim)}
     .dw-history-item{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
     .dw-trend-link{display:block;margin-top:10px;font-size:12px;color:var(--accent-b);cursor:pointer;text-align:right}
@@ -562,6 +566,7 @@ function renderDiet() {
       <button class="dw-log-btn" onclick="logWeight()">LOG WEIGHT</button>
     </div>
     <div class="dw-history">${recentHTML}</div>
+    ${bodyweightDriftHTML()}
     ${Object.keys(weightLog).length >= 3 ? `<div class="dw-trend-link" onclick="go('dietTrend')">VIEW TREND \u2192</div>` : ''}
   </div>`;
 
@@ -1678,6 +1683,107 @@ function renderDietTDEE() {
     <div id="tdee-results"></div>`;
 }
 
+// ── BODYWEIGHT DRIFT -> MACRO TARGETS ─────────────────────────────────────
+// BMR is driven by bodyweight, so targets set months ago quietly stop matching
+// the person using them. This surfaces the drift and offers a recalculation
+// rather than performing one: silently moving someone's calorie goal is the
+// wrong default, especially downwards.
+const _WEIGHT_DRIFT_KG = 2;
+
+function bodyweightDrift() {
+  const p = (typeof tdeeProfile !== 'undefined' && tdeeProfile) || null;
+  if (!p || !(p.weight_kg > 0) || !(p.height_cm > 0) || !(p.age > 0)) return null;
+
+  // weightLog is in display units; the profile is always kg
+  const dates = Object.keys(weightLog || {}).sort();
+  let latest = 0;
+  for (let i = dates.length - 1; i >= 0; i--) {
+    const v = parseFloat(weightLog[dates[i]]);
+    if (v > 0) { latest = v; break; }
+  }
+  if (!latest) return null;
+  const latestKg = isImperial() ? latest / 2.205 : latest;
+
+  const deltaKg = latestKg - p.weight_kg;
+  if (Math.abs(deltaKg) < _WEIGHT_DRIFT_KG) return null;
+
+  const next = computeTDEETargets({
+    weightKg: latestKg, heightCm: p.height_cm, age: p.age,
+    sex: p.sex, activity: p.activity, goal: p.goal || 'maintain',
+  });
+  if (!next) return null;
+  const current = (dietMeta && dietMeta.dailyGoals) || {};
+  if (Math.abs((current.calories || 0) - next.target) < 25) return null;   // not worth asking
+
+  return {
+    deltaKg,
+    latestKg,
+    current: current.calories || 0,
+    next,
+    // Shown in the unit the user reads
+    deltaShown: Math.abs(isImperial() ? deltaKg * 2.205 : deltaKg).toFixed(1),
+  };
+}
+
+function bodyweightDriftHTML() {
+  const d = bodyweightDrift();
+  if (!d) return '';
+  const dir = d.deltaKg < 0 ? 'lighter' : 'heavier';
+  const arrow = d.next.target < d.current ? '\u2193' : '\u2191';
+  return `<div class="dw-drift ani">
+      <div class="dw-drift-text">
+        You're <strong>${d.deltaShown} ${wtUnit()} ${dir}</strong> than when these targets were set.
+        Recalculated they'd be <strong>${d.next.target.toLocaleString()} cal</strong>
+        <span class="dw-drift-arrow">${arrow}</span> from ${d.current.toLocaleString()}.
+      </div>
+      <button class="w-action-btn" style="margin:10px 0 0;width:100%"
+        onclick="applyBodyweightDrift()">UPDATE MY TARGETS</button>
+    </div>`;
+}
+
+function applyBodyweightDrift() {
+  const d = bodyweightDrift();
+  if (!d) return;
+  dietMeta.dailyGoals = {
+    calories: d.next.target, protein: d.next.protein,
+    carbs: d.next.carbs, fat: d.next.fat,
+  };
+  // Keep the profile in step, or the prompt would reappear immediately
+  tdeeProfile.weight_kg = parseFloat(d.latestKg.toFixed(1));
+  LS.set('hvi_tdee_profile', tdeeProfile);
+  LS.set('hvi_diet_meta', dietMeta);
+  if (typeof track === 'function') track('targets_recalculated', { delta_kg: Math.round(d.deltaKg) });
+  go('diet');
+}
+
+// One implementation of the Mifflin-St Jeor chain, shared by the calculator and
+// by the recalculation prompt that appears when bodyweight drifts. Two copies
+// would drift apart the moment either was tuned.
+const _TDEE_MULTIPLIERS = { sedentary: 1.2, light: 1.375, moderate: 1.55, active: 1.725, very_active: 1.9 };
+const _TDEE_OFFSETS = { cut: -500, cut_mild: -250, maintain: 0, bulk_lean: 250, bulk: 500 };
+const _TDEE_SPLITS = {
+  cut:       { p: 0.35, c: 0.35, f: 0.30 },
+  cut_mild:  { p: 0.35, c: 0.35, f: 0.30 },
+  maintain:  { p: 0.30, c: 0.40, f: 0.30 },
+  bulk_lean: { p: 0.30, c: 0.45, f: 0.25 },
+  bulk:      { p: 0.25, c: 0.50, f: 0.25 },
+};
+
+// weightKg / heightCm / age are metric; goal is one of the five above.
+function computeTDEETargets({ weightKg, heightCm, age, sex, activity, goal }) {
+  if (!(weightKg > 0) || !(heightCm > 0) || !(age > 0)) return null;
+  const bmr = (10 * weightKg) + (6.25 * heightCm) - (5 * age) + (sex === 'male' ? 5 : -161);
+  const tdee = Math.round(bmr * (_TDEE_MULTIPLIERS[activity] || 1.55));
+  const target = tdee + (_TDEE_OFFSETS[goal] || 0);
+  const sp = _TDEE_SPLITS[goal] || _TDEE_SPLITS.maintain;
+  return {
+    bmr: Math.round(bmr), tdee, target,
+    protein: Math.round((target * sp.p) / 4),
+    carbs: Math.round((target * sp.c) / 4),
+    fat: Math.round((target * sp.f) / 9),
+  };
+}
+
 function calculateTDEE() {
   const age = parseFloat(document.getElementById('tdee-age')?.value);
   const rawWeight = parseFloat(document.getElementById('tdee-weight')?.value);
@@ -1694,23 +1800,12 @@ function calculateTDEE() {
   }
   if (errEl) errEl.innerHTML = '';
 
-  // Mifflin-St Jeor
-  const bmr = (10 * weight) + (6.25 * height) - (5 * age) + (_tdeeSex === 'male' ? 5 : -161);
-  const multipliers = { sedentary: 1.2, light: 1.375, moderate: 1.55, active: 1.725, very_active: 1.9 };
-  const tdee = Math.round(bmr * (multipliers[_tdeeActivity] || 1.55));
-  const offsets = { cut: -500, cut_mild: -250, maintain: 0, bulk_lean: 250, bulk: 500 };
-  const target = tdee + (offsets[_tdeeGoal] || 0);
-  const splits = {
-    cut:       { p: 0.35, c: 0.35, f: 0.30 },
-    cut_mild:  { p: 0.35, c: 0.35, f: 0.30 },
-    maintain:  { p: 0.30, c: 0.40, f: 0.30 },
-    bulk_lean: { p: 0.30, c: 0.45, f: 0.25 },
-    bulk:      { p: 0.25, c: 0.50, f: 0.25 },
-  };
-  const sp = splits[_tdeeGoal] || splits.maintain;
-  const protein_g = Math.round((target * sp.p) / 4);
-  const carbs_g = Math.round((target * sp.c) / 4);
-  const fat_g = Math.round((target * sp.f) / 9);
+  const calc = computeTDEETargets({
+    weightKg: weight, heightCm: height, age, sex: _tdeeSex,
+    activity: _tdeeActivity, goal: _tdeeGoal,
+  });
+  const bmr = calc.bmr, tdee = calc.tdee, target = calc.target;
+  const protein_g = calc.protein, carbs_g = calc.carbs, fat_g = calc.fat;
 
   // Save profile
   tdeeProfile = { age, sex: _tdeeSex, weight_kg: weight, height_cm: height, activity: _tdeeActivity, goal: _tdeeGoal };
@@ -1766,6 +1861,7 @@ function logWeight() {
   if (!val || val < 20 || val > 300) return;
   weightLog[today()] = val;
   LS.set('hvi_weight_log', weightLog);
+  if (window.Arete) window.Arete.emit('weight:logged', { value: val });
   go('diet');
 }
 
