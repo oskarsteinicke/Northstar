@@ -164,7 +164,7 @@ module.exports = function () {
     r.check('so the prompt does not reappear', run(drifted, 'bodyweightDrift()') === null);
   }
 
-  r.section('the threshold is 1kg, and it actually fires');
+  r.section('the threshold is 1.5kg, and it actually fires');
   {
     const mk = (logged) => {
       const s2 = sb({
@@ -180,12 +180,14 @@ module.exports = function () {
                  goalType:'maintain'};`);
       return s2;
     };
-    // A 1kg change only shifts the target ~15 cal, so the calorie guard has to
-    // sit below that or raising sensitivity here would change nothing.
+    // 1.5kg shifts the target by 18-28 cal, so the calorie guard must sit below
+    // that — otherwise raising the weight threshold changes nothing at all.
+    const up = mk(81.5);
+    r.check('1.5kg up is surfaced', run(up, 'bodyweightDrift()') !== null, '(suppressed by the calorie guard)');
+    const down = mk(78.5);
+    r.check('1.5kg down is surfaced', run(down, 'bodyweightDrift()') !== null);
     const one = mk(81);
-    r.check('1kg up is surfaced', run(one, 'bodyweightDrift()') !== null, '(suppressed by the calorie guard)');
-    const oneDown = mk(79);
-    r.check('1kg down is surfaced', run(oneDown, 'bodyweightDrift()') !== null);
+    r.check('a single kilo no longer nags', run(one, 'bodyweightDrift()') === null);
     const half = mk(80.4);
     r.check('half a kilo is still ignored', run(half, 'bodyweightDrift()') === null);
     r.check('and renders nothing', run(half, 'bodyweightDriftHTML()') === '');
