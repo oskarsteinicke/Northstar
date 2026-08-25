@@ -1329,14 +1329,25 @@ function _wpRelStrength() {
 // Strength tiers. Thresholds are "% of an average lifter", so Intermediate
 // straddles 100%. Deliberately named apart from the character LEVEL_TITLES so
 // a strength rank is never mistaken for an account level.
+// One gold ramp, shared by both map modes. The steps are spaced by luminance
+// rather than by opacity: the previous scale varied alpha over a dark ground,
+// so the middle tiers landed within a few points of each other and were
+// effectively indistinguishable on a phone.
+// Luminance spacing was never the problem — the old scale was already ~30-50
+// apart per step. What made the middle tiers hard to tell apart was chroma:
+// they were desaturated browns that read as the same muddy tone at phone size.
+// This ramp holds similar luminance spacing but drives saturation much harder
+// through the low and middle steps, and pushes both ends further apart.
+const _WP_RAMP = ['#17171a', '#5a2f12', '#97561d', '#cf8b2e', '#edbc6b', '#fdf0d5'];
+
 const _WP_TIERS = [
-  { min: 0,   name: 'Untrained',    color: 'rgba(255,255,255,0.07)' },
-  { min: 1,   name: 'Novice',       color: 'rgba(176,132,72,0.34)' },
-  { min: 60,  name: 'Apprentice',   color: 'rgba(176,132,72,0.62)' },
-  { min: 85,  name: 'Intermediate', color: '#b8874a' },
-  { min: 110, name: 'Advanced',     color: '#e3b878' },
-  { min: 140, name: 'Elite',        color: '#f7dcb0' },
-  { min: 175, name: 'Demigod',      color: '#fff1d6' },
+  { min: 0,   name: 'Untrained',    color: _WP_RAMP[0] },
+  { min: 1,   name: 'Novice',       color: _WP_RAMP[1] },
+  { min: 60,  name: 'Apprentice',   color: _WP_RAMP[2] },
+  { min: 85,  name: 'Intermediate', color: _WP_RAMP[3] },
+  { min: 110, name: 'Advanced',     color: _WP_RAMP[4] },
+  { min: 140, name: 'Elite',        color: _WP_RAMP[5] },
+  { min: 175, name: 'Demigod',      color: '#fff8ea' },
 ];
 
 function _wpTier(pct) {
@@ -1351,16 +1362,16 @@ function _wpHeatPct(pct) {
   return _wpTier(pct).color;
 }
 
-// Five-step gold ramp. Untrained regions stay barely lit so the figure still
-// reads as a body.
+// Relative ramp for the "trained this week" mode. Untrained regions keep the
+// lowest step so the figure still reads as a body rather than as holes.
 function _wpHeat(v, max) {
-  if (!v) return 'rgba(255,255,255,0.055)';
+  if (!v) return _WP_RAMP[0];
   const t = Math.min(1, v / (max || 1));
-  if (t <= 0.2) return 'rgba(176,132,72,0.34)';
-  if (t <= 0.45) return 'rgba(176,132,72,0.62)';
-  if (t <= 0.7) return '#b8874a';
-  if (t <= 0.9) return '#e3b878';
-  return '#f7dcb0';
+  if (t <= 0.2) return _WP_RAMP[1];
+  if (t <= 0.45) return _WP_RAMP[2];
+  if (t <= 0.7) return _WP_RAMP[3];
+  if (t <= 0.9) return _WP_RAMP[4];
+  return _WP_RAMP[5];
 }
 
 // Stylised front/back figures. `sym` shapes are drawn once and mirrored about
@@ -1634,12 +1645,7 @@ function renderWorkoutProgress() {
         ${_WP_TIERS.slice(1).map(t => `<div class="wp-tierseg"><i style="background:${t.color}"></i><span>${t.name}</span></div>`).join('')}
       </div>` : `<div class="wp-legend">
         <span>${isStrength ? 'Weaker' : 'Untrained'}</span>
-        <i style="background:rgba(255,255,255,0.055)"></i>
-        <i style="background:rgba(176,132,72,0.34)"></i>
-        <i style="background:rgba(176,132,72,0.62)"></i>
-        <i style="background:#b8874a"></i>
-        <i style="background:#e3b878"></i>
-        <i style="background:#f7dcb0"></i>
+        ${_WP_RAMP.map(c => `<i style="background:${c}"></i>`).join('')}
         <span>${isStrength ? 'Strongest' : 'Most'}</span>
       </div>`}
       ${ranked.length ? `<div class="wp-ranklist">${rankHTML}</div>` : ''}
