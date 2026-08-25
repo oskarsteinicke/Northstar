@@ -60,39 +60,39 @@ async function syncAppleHealth() {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
 
-    Object.entries(data).forEach(([dateKey, d]) => {
-      if (d.sleep && (!sleepLog[dateKey] || !sleepLog[dateKey].hours)) {
-        sleepLog[dateKey] = {
-          ...sleepLog[dateKey],
+    Object.entries(data).forEach(([dk, d]) => {
+      if (d.sleep && (!sleepLog[dk] || !sleepLog[dk].hours)) {
+        sleepLog[dk] = {
+          ...sleepLog[dk],
           hours: parseFloat(d.sleep),
           source: 'applehealth'
         };
       }
-      if (d.sleepQuality && !sleepLog[dateKey]?.quality) {
-        sleepLog[dateKey] = { ...sleepLog[dateKey], quality: d.sleepQuality };
+      if (d.sleepQuality && !sleepLog[dk]?.quality) {
+        sleepLog[dk] = { ...sleepLog[dk], quality: d.sleepQuality };
       }
       if (d.restingHR) {
-        sleepLog[dateKey] = { ...sleepLog[dateKey], restingHR: d.restingHR };
+        sleepLog[dk] = { ...sleepLog[dk], restingHR: d.restingHR };
       }
       if (d.steps) {
         const existing = JSON.parse(localStorage.getItem('hvi_steps_log') || '{}');
-        existing[dateKey] = d.steps;
+        existing[dk] = d.steps;
         localStorage.setItem('hvi_steps_log', JSON.stringify(existing));
       }
       if (d.activeEnergy) {
         const existing = JSON.parse(localStorage.getItem('hvi_energy_log') || '{}');
-        existing[dateKey] = d.activeEnergy;
+        existing[dk] = d.activeEnergy;
         localStorage.setItem('hvi_energy_log', JSON.stringify(existing));
       }
       if (d.weight) {
-        if (!weightLog[dateKey]) {
-          weightLog[dateKey] = d.weight;
+        if (!weightLog[dk]) {
+          weightLog[dk] = d.weight;
         }
       }
       if (d.workouts && Array.isArray(d.workouts)) {
         d.workouts.forEach(w => {
-          if (!workoutLog[dateKey]) {
-            workoutLog[dateKey] = {
+          if (!workoutLog[dk]) {
+            workoutLog[dk] = {
               dayName: w.type || 'Apple Health Activity',
               duration: w.duration || 0,
               exercises: [],
@@ -328,9 +328,9 @@ async function _syncGoogleFit() {
       const start = new Date(parseInt(s.startTimeMillis));
       const end = new Date(parseInt(s.endTimeMillis));
       const hours = ((end - start) / 3600000).toFixed(1);
-      const dateKey = dateKey(start);
-      if (!sleepLog[dateKey] || !sleepLog[dateKey].hours) {
-        sleepLog[dateKey] = { ...sleepLog[dateKey], hours: parseFloat(hours), source: 'googlefit' };
+      const dayKey = dateKey(start);
+      if (!sleepLog[dayKey] || !sleepLog[dayKey].hours) {
+        sleepLog[dayKey] = { ...sleepLog[dayKey], hours: parseFloat(hours), source: 'googlefit' };
       }
     });
     LS.set('hvi_sleep_log', sleepLog);
@@ -348,11 +348,11 @@ async function _syncGoogleFit() {
     (data.session || []).forEach(s => {
       if (s.activityType === 72) return; // skip sleep
       const start = new Date(parseInt(s.startTimeMillis));
-      const dateKey = dateKey(start);
+      const dayKey = dateKey(start);
       const duration = Math.round((parseInt(s.endTimeMillis) - parseInt(s.startTimeMillis)) / 60000);
       // Only add if no workout logged that day already
-      if (!workoutLog[dateKey]) {
-        workoutLog[dateKey] = {
+      if (!workoutLog[dayKey]) {
+        workoutLog[dayKey] = {
           dayName: s.name || 'External Activity',
           duration: duration,
           exercises: [],
@@ -371,10 +371,11 @@ async function _syncGoogleFit() {
   if (weightRes?.ok) {
     const data = await weightRes.json();
     (data.point || []).forEach(p => {
-      const dateKey = dateKey(new Date(parseInt(p.startTimeNanos) / 1e6));
+      const dayKey = dateKey(new Date(parseInt(p.startTimeNanos) / 1e6));
       const kg = p.value?.[0]?.fpVal;
-      if (kg && !weightLog[dateKey]) {
-        weightLog[dateKey] = parseFloat(kg.toFixed(1));
+      const w = _kgToDisplayWeight(kg);
+      if (w && !weightLog[dayKey]) {
+        weightLog[dayKey] = w;
         LS.set('hvi_weight_log', weightLog);
       }
     });
@@ -409,6 +410,18 @@ async function _syncStrava() {
     }
   });
   LS.set('hvi_workout_log', workoutLog);
+}
+
+// weightLog is stored in whatever unit the user sees, but Google Fit and Fitbit
+// both report kilograms (Fitbit defaults to metric when no Accept-Language unit
+// system is requested, which is the case here). Importing the raw number showed
+// an 80 kg bodyweight as "80 lbs" for imperial users — and that figure feeds the
+// relative-strength scoring, so it skewed those percentages too.
+function _kgToDisplayWeight(kg) {
+  const n = parseFloat(kg);
+  if (!isFinite(n)) return null;
+  const v = (typeof isImperial === 'function' && isImperial()) ? n * 2.20462 : n;
+  return parseFloat(v.toFixed(1));
 }
 
 // ── FITBIT ───────────────────────────────────────────────────────────────
@@ -466,8 +479,9 @@ async function _syncFitbit() {
   if (wtRes?.ok) {
     const data = await wtRes.json();
     (data.weight || []).forEach(w => {
-      if (!weightLog[w.date]) {
-        weightLog[w.date] = parseFloat(w.weight.toFixed(1));
+      const val = _kgToDisplayWeight(w.weight);
+      if (val && !weightLog[w.date]) {
+        weightLog[w.date] = val;
       }
     });
     LS.set('hvi_weight_log', weightLog);
