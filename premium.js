@@ -85,8 +85,15 @@ function requirePremium(feature) {
 }
 function canAddHabit() {
   if (isPremium()) return true;
-  try { return (Array.isArray(window.habits) ? window.habits.length : 0) < FREE_HABIT_LIMIT; }
-  catch { return true; }
+  try {
+    // `habits` is a top-level `let` in app.js, which is script-scoped and never
+    // becomes a property of window. Reading window.habits therefore always gave
+    // undefined, the count fell back to 0, and the free limit was never
+    // enforced for anyone. Classic scripts share one lexical scope, so the
+    // binding is reachable directly.
+    const list = (typeof habits !== 'undefined' && Array.isArray(habits)) ? habits : [];
+    return list.length < FREE_HABIT_LIMIT;
+  } catch { return true; }   // never block someone because of a lookup failure
 }
 
 // ── PAYWALL MODAL ───────────────────────────────────────────────────────────

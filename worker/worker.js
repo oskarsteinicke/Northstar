@@ -211,6 +211,31 @@ async function updateUserMeta(userId, meta, env) {
   return res.ok;
 }
 
+// ── AI ABUSE GUARD ────────────────────────────────────────────────────────
+// The AI proxy has to stay open: Arete works without an account, so guests use
+// the coach and the food scanner. That also means anyone who learns this URL
+// can spend the Gemini key — CORS does not stop a non-browser client. Limit by
+// IP instead of authenticating.
+//
+// KV is eventually consistent so the count is approximate, which is fine: the
+// job is to stop a script hammering the endpoint, not to be exact. Fails open,
+// because a storage hiccup must never take the coach down for real users.
+const AI_LIMIT_PER_HOUR = 40;
+
+async function aiRateLimited(request, env) {
+  if (!env.HEALTH_KV) return false;
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  if (!ip) return false;
+  const bucket = Math.floor(Date.now() / 3600000);
+  const key = `rl:ai:${bucket}:${ip}`;
+  try {
+    const n = parseInt(await env.HEALTH_KV.get(key) || '0', 10) || 0;
+    if (n >= AI_LIMIT_PER_HOUR) return true;
+    await env.HEALTH_KV.put(key, String(n + 1), { expirationTtl: 7200 });
+  } catch { return false; }
+  return false;
+}
+
 // ── WEB PUSH ──────────────────────────────────────────────────────────────
 // Reminders for the installed web app. Pushes carry no payload, so only VAPID
 // auth is needed and the RFC 8291 encryption step is skipped entirely; the
@@ -617,6 +642,9 @@ export default {
       // Groq proxy
       if (path === '/groq') {
         if (!env.GROQ_KEY) return jsonResponse({ error: 'Groq not configured' }, 500, origin);
+        if (await aiRateLimited(request, env)) {
+          return jsonResponse({ error: 'Too many AI requests. Please wait a few minutes.' }, 429, origin);
+        }
         const body = await request.text();
         const res = await fetch(GROQ_URL, {
           method: 'POST',
@@ -634,6 +662,9 @@ export default {
       }
 
       // Default: Gemini proxy (root path)
+      if (await aiRateLimited(request, env)) {
+        return jsonResponse({ error: 'Too many AI requests. Please wait a few minutes.' }, 429, origin);
+      }
       const body = await request.text();
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${env.GEMINI_KEY}`,
