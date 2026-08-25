@@ -15,6 +15,7 @@ Exit code is non-zero if any check fails, so this works in CI as-is.
 | `smoke` | every script loads; cross-file functions exist; auth screens render |
 | `auth` | signup/sign-in error handling, duplicate accounts, one-shot notices |
 | `deletion` | worker authorisation boundary, deletion ordering, both abort paths, the confirm gate |
+| `gamification` | XP curve, levels, achievement idempotence, quest payout, daily score |
 | `diet` | meal editing per section, macro re-estimation on rename, imported weight units |
 | `habits` | completion history, rollover backfill, streak breaks, local date keys, weekly schedules |
 | `integrations` | imported weight units, sync paths run, local date attribution |

@@ -145,7 +145,13 @@ function getWeekKey() {
   return `${d.getFullYear()}-W${String(wk).padStart(2, '0')}`;
 }
 
-function getLevel(xp) { return Math.max(1, Math.floor(Math.sqrt((xp || 0) / 100)) + 1); }
+// Guard the input: Math.sqrt of a negative is NaN, and Math.max(1, NaN) is NaN,
+// which would then render as "Level NaN" on every screen that shows one.
+function getLevel(xp) {
+  const n = Number(xp);
+  const safe = Number.isFinite(n) && n > 0 ? n : 0;
+  return Math.max(1, Math.floor(Math.sqrt(safe / 100)) + 1);
+}
 
 function xpToNextLevel(xp) {
   const lvl = getLevel(xp);
@@ -257,7 +263,9 @@ function checkAchievements() {
 function computeDailyScore() {
   const { done, total } = totalPct();
   const habitScore = total > 0 ? (done / total) * 40 : 0;
-  const workoutScore = !!workoutLog[today()] ? 30 : 0;
+  // Opening the workout screen creates an empty entry for the day, so testing
+  // for the entry handed out 30 of 100 points for merely visiting the tab.
+  const workoutScore = trainedOnDay(today()) ? 30 : 0;
   const je = journal[today()] || {};
   const journalScore = Object.values(je).some(Boolean) ? 15 : 0;
   const dm = getDayMacros();
@@ -2246,7 +2254,7 @@ function generateDailyCard() {
   const pct = total > 0 ? Math.round((done/total)*100) : 0;
   const best = Math.max(0, ...habits.map(h => log[h.id]?.streak || 0));
   const todayMacros = getDayMacros();
-  const todayWorkout = workoutLog[today()];
+  const todayWorkout = trainedOnDay(today());
   const lvl = getLevel(gamification.xp || 0);
 
   const stats = [

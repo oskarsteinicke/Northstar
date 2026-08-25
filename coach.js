@@ -39,7 +39,9 @@ function buildCoachSystemPrompt() {
   const progName = (workoutMeta?.activeProgram
     ? (allPrograms().find(p => p.id === workoutMeta.activeProgram)?.name || workoutMeta.activeProgram)
     : null) || 'None';
-  const todayWorkout = workoutLog?.[d] ? 'Logged' : 'Not logged yet';
+  // Same trap: an auto-created empty entry would tell the coach a workout was
+  // logged, so it congratulated people on sessions they had not done.
+  const todayWorkout = (typeof trainedOnDay === 'function' && trainedOnDay(d)) ? 'Logged' : 'Not logged yet';
 
   // Diet (training-adjusted targets so coach references what the user sees)
   const dm = getDayMacros();
