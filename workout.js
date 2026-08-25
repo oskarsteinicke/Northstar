@@ -1333,12 +1333,15 @@ function _wpRelStrength() {
 // rather than by opacity: the previous scale varied alpha over a dark ground,
 // so the middle tiers landed within a few points of each other and were
 // effectively indistinguishable on a phone.
-// Luminance spacing was never the problem — the old scale was already ~30-50
-// apart per step. What made the middle tiers hard to tell apart was chroma:
-// they were desaturated browns that read as the same muddy tone at phone size.
-// This ramp holds similar luminance spacing but drives saturation much harder
-// through the low and middle steps, and pushes both ends further apart.
-const _WP_RAMP = ['#17171a', '#5a2f12', '#97561d', '#cf8b2e', '#edbc6b', '#fdf0d5'];
+// Gold is the reward colour in Arete, so it is reserved for the strongest end
+// and weak groups wash out to pale cream instead. Untrained stays neutral dark
+// so "nothing logged" never competes with "trained a little".
+//
+// The steps separate on saturation rather than brightness: the low end is
+// almost desaturated, the top is full gold. Ordering it the other way round —
+// dark for weak, near-white for strong — made the palest tone read as the
+// achievement, which is backwards for this palette.
+const _WP_RAMP = ['#17171a', '#f5ead7', '#eddbb2', '#e0c281', '#d4a949', '#c8901a'];
 
 const _WP_TIERS = [
   { min: 0,   name: 'Untrained',    color: _WP_RAMP[0] },
