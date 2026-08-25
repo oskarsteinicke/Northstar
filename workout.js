@@ -1021,7 +1021,7 @@ function renderWorkoutHistory() {
     const noteSnip = wl.notes ? ` · "${wl.notes.slice(0,40)}${wl.notes.length>40?'…':''}"` : '';
     const volPRBadge = wl.volumePR ? ' <span class="pr-badge" style="animation:none">🏆 Vol PR</span>' : '';
     return `<div class="w-hist-item" style="position:relative"><div class="w-hist-date">${fmtDate(d)}</div>
-      <div class="w-hist-prog">${dayInfo ? dayInfo.name : 'Workout'} ${prog ? '· ' + prog.name : ''}${volPRBadge}</div>
+      <div class="w-hist-prog">${esc(dayInfo ? dayInfo.name : (wl.dayName || 'Workout'))} ${prog ? '· ' + prog.name : ''}${volPRBadge}</div>
       <div class="w-hist-vol">${totalSets} sets · ${totalVol.toLocaleString()} ${wtUnit()} vol${durStr ? ' · ' + durStr : ''}${noteSnip}</div>
       <button class="w-repeat-btn" onclick="event.stopPropagation();repeatWorkout('${d}')" title="Repeat this workout">↻</button></div>`;
   }).join('') : '<div class="empty-state"><div class="empty-state-icon">🏋️</div><div class="empty-state-title">No workouts yet</div><div class="empty-state-sub">Start your first workout to see your history here.</div><button class="empty-state-btn" onclick="go(\'workoutActive\')">Start Workout</button></div>';
@@ -1031,7 +1031,9 @@ function renderWorkoutHistory() {
     const d = new Date(); d.setDate(d.getDate() - (6 - i));
     const key = d.toLocaleDateString('en-CA');
     const wl2 = workoutLog[key];
-    const vol = wl2 ? wl2.exercises.reduce((s,e) => s + e.sets.reduce((s2,st) => s2 + (st.completed ? st.weight*st.reps : 0), 0), 0) : 0;
+    // Must match the per-workout figure in the list below: working sets only
+    const vol = wl2 ? (wl2.exercises || []).reduce((s,e) => s + (e.sets || []).reduce((s2,st) =>
+      s2 + (st.completed && !st.warmup ? (st.weight||0) * (st.reps||0) : 0), 0), 0) : 0;
     return { key, vol, day: d.toLocaleDateString('en-US',{weekday:'narrow'}) };
   });
   const maxVol = Math.max(...last7.map(d => d.vol), 1);
@@ -1881,7 +1883,9 @@ function buildExerciseSparkline(exerciseId) {
     if (!wl?.exercises) continue;
     const ex = wl.exercises.find(e => e.exerciseId === exerciseId);
     if (ex) {
-      const best = Math.max(0, ...ex.sets.filter(s=>s.completed).map(s => s.weight * s.reps));
+      const best = Math.max(0, ...(ex.sets || [])
+        .filter(s => s.completed && !s.warmup)
+        .map(s => (s.weight || 0) * (s.reps || 0)));
       if (best > 0) sessions.unshift({ date: d, vol: best });
     }
     if (sessions.length >= 10) break;

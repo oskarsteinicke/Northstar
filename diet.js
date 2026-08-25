@@ -569,7 +569,7 @@ function renderDiet() {
     const mCal = ml.items.reduce((s,i) => s + (i.calories||0), 0);
     const mP = ml.items.reduce((s,i) => s + (i.protein||0), 0);
     const itemsHTML = ml.items.map(it => `<div class="d-meal-item">${esc(it.name)} \u2014 ${it.calories}cal, ${it.protein}P, ${it.carbs}C, ${it.fat}F</div>`).join('');
-    return `<div class="d-meal"><div class="d-meal-head"><div class="d-meal-name">${esc(ml.name)}</div><div style="display:flex;align-items:center;gap:8px"><div class="d-meal-cal">${mCal} cal</div><button class="d-del-btn" onclick="deleteMeal(${mi})">\u00D7</button></div></div>
+    return `<div class="d-meal"><div class="d-meal-head"><div class="d-meal-name">${esc(ml.name)}</div><div style="display:flex;align-items:center;gap:8px"><div class="d-meal-cal">${mCal} cal</div><button class="d-del-btn" onclick="deleteMeal(${mi},'${esc(ml.id || '')}')">\u00D7</button></div></div>
       <div class="d-meal-macros">${mP}P</div>${itemsHTML}</div>`;
   }).join('') : '<p style="padding:0 24px;font-size:13px;color:var(--text-dim)">No meals logged today.</p>';
 
@@ -591,12 +591,28 @@ function renderDiet() {
   if (typeof checkNutritionTriggers === 'function') checkNutritionTriggers();
 }
 
-function deleteMeal(mi) {
+// Deleting used to splice by array index out of the in-memory copy. That copy
+// can lag what's on disk — getDayMacros() re-reads fresh for exactly that
+// reason — so a stale index could remove the wrong meal, and writing the whole
+// stale object back could resurrect one that had already been deleted. Work
+// from fresh storage and match on the meal's id.
+function deleteMeal(mi, id) {
   const t = today();
-  if (!mealLog[t]) return;
-  const meal = mealLog[t].meals[mi];
-  if (!confirm(`Delete "${meal ? meal.name : 'this meal'}"?`)) return;
-  mealLog[t].meals.splice(mi, 1);
+  const fresh = LS.get('hvi_meal_log', {});
+  const meals = (fresh[t] || {}).meals || [];
+  if (!meals.length) return;
+
+  let idx = -1;
+  if (id) idx = meals.findIndex(m => m && m.id === id);
+  // Meals logged before ids existed fall back to the index
+  if (idx < 0 && !id && mi >= 0 && mi < meals.length) idx = mi;
+  if (idx < 0) { go('diet'); return; }   // already gone; just refresh
+
+  const meal = meals[idx];
+  if (!confirm(`Delete "${meal && meal.name ? meal.name : 'this meal'}"?`)) return;
+  meals.splice(idx, 1);
+  fresh[t].meals = meals;
+  mealLog = fresh;
   LS.set('hvi_meal_log', mealLog);
   go('diet');
 }
