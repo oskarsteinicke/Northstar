@@ -19,6 +19,9 @@ const PREMIUM = {
   yearlySavePct: 38,
   trialDays: 7,
   freeHabitLimit: 5,
+  // Display only. The server decides who is inside the limit; if these ever
+  // disagree, the server wins and this is just wrong copy on a badge.
+  founderLimit: 50,
 };
 const FREE_HABIT_LIMIT = PREMIUM.freeHabitLimit;
 const _PREMIUM_WORKER_URL = 'https://arete-ai.oskarsteinicke.workers.dev';
@@ -71,8 +74,31 @@ function getUserPlan() {
   return 'free';
 }
 function isPremium() { return getUserPlan() === 'premium'; }
-// True only for paying subscribers (not grandfathered / trial) — used for "Manage" UI
+
+// One of the first accounts, granted premium permanently by the server. The
+// server's answer is authoritative; the local copy only keeps the badge correct
+// before the session metadata has been refreshed.
+function isFounder() {
+  try {
+    const meta = (typeof getSession === 'function' ? getSession() : null)?.user?.user_metadata;
+    if (meta && meta.founder === true) return true;
+  } catch {}
+  return !!localStorage.getItem('hvi_founder_n');
+}
+function founderNumber() {
+  try {
+    const meta = (typeof getSession === 'function' ? getSession() : null)?.user?.user_metadata;
+    if (meta && meta.founder_n) return meta.founder_n;
+  } catch {}
+  return parseInt(localStorage.getItem('hvi_founder_n') || '0', 10) || 0;
+}
+
+// True only for paying subscribers (not grandfathered / trial / founder) —
+// used for "Manage" UI. Founders carry plan:'premium' in exactly the same
+// fields a subscriber does, so without the founder test they would be offered
+// a billing portal for a Stripe customer that does not exist.
 function isPaidSubscriber() {
+  if (isFounder()) return false;
   return !!_metaPlan() || ['premium', 'pro', 'elite'].includes(localStorage.getItem('hvi_plan'));
 }
 
@@ -283,6 +309,14 @@ function _showUpgradeSuccess() {
 
 // ── PROFILE SETTINGS CARD ───────────────────────────────────────────────────
 function renderPremiumSettingsCard() {
+  // First 50 accounts — server-granted, permanent
+  if (isFounder()) {
+    const n = founderNumber();
+    return `<div class="pw-status pw-status-founder">
+      <div class="pw-status-row"><span class="pw-status-badge">\u{1F451} Founder</span><span class="pw-status-plan">Premium \u00b7 free for life</span></div>
+      <div class="pw-status-note">${n ? `You were account #${n}. ` : ''}One of the first ${PREMIUM.founderLimit}. Everything is unlocked, permanently. Thank you.</div>
+    </div>`;
+  }
   // Grandfathered founders
   if (isGrandfathered() && !isPaidSubscriber()) {
     return `<div class="pw-status pw-status-founder">

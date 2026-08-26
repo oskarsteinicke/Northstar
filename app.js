@@ -217,6 +217,40 @@ async function authRefresh() {
   return false;
 }
 
+// ── FOUNDER ACCESS ────────────────────────────────────────────
+// The first 50 accounts keep every premium feature for good. The server owns
+// the decision and the count; this only asks once per account per device and
+// records the answer. Never blocks the UI and never throws.
+async function claimFounderAccess() {
+  const token = getAccessToken();
+  const uid = getCurrentUserId();
+  if (!token || !uid) return null;
+  // Keyed on the user id, not a bare flag, so signing into a different account
+  // on the same device still gets its own answer.
+  if (localStorage.getItem('hvi_founder_checked') === uid) return null;
+  try {
+    const res = await fetch('https://arete-ai.oskarsteinicke.workers.dev/founder/claim', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    });
+    // An expired token is worth one retry — this runs at launch, which is
+    // exactly when the stored token is most likely to have just gone stale.
+    if (res.status === 401 && await authRefresh()) return claimFounderAccess();
+    const d = await res.json().catch(() => ({}));
+    if (!d || d.ok !== true) return null;
+    localStorage.setItem('hvi_founder_checked', uid);
+    if (d.founder) {
+      localStorage.setItem('hvi_plan', 'premium');
+      localStorage.setItem('hvi_founder_n', String(d.n));
+      // The grant was written to user_metadata, but this device is still
+      // holding the session from before it. Refreshing pulls it in, so the
+      // plan survives a cleared cache and shows up on every other device.
+      await authRefresh();
+    }
+    return d;
+  } catch { return null; }
+}
+
 async function authSignOut() {
   const token = getAccessToken();
   // Push data to cloud BEFORE signing out so nothing is lost
@@ -1318,6 +1352,9 @@ async function init() {
     try { localStorage.removeItem('hvi_guest'); } catch {}
     setSyncStatus('pending');
     await cloudPull();
+    // After the pull, so a founder grant is not overwritten by older cloud
+    // state, and not awaited, so a slow or down Worker cannot delay launch.
+    claimFounderAccess();
   } else {
     try { if (!localStorage.getItem('hvi_guest')) localStorage.setItem('hvi_guest', '1'); } catch {}
   }
