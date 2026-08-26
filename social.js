@@ -241,11 +241,7 @@ function renderSleep() {
     <div class="page-head ani"><div class="page-title">Sleep</div><div class="page-sub">Recovery is where growth happens.</div></div>
     <div class="da-section ani" style="margin:0 24px 16px;padding:20px">
       <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text-muted);margin-bottom:12px">Last Night's Sleep</div>
-      <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:16px">
-        <div style="flex:1">
-          <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">Hours slept</div>
-          <input class="d-input" type="number" min="0" max="16" step="0.5" value="${entry.hours||''}" placeholder="e.g. 7.5" style="margin:0" oninput="saveSleepHours(this.value)">
-        </div>
+      <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:14px">
         <div style="flex:1">
           <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">Bedtime</div>
           <input class="d-input" type="time" value="${entry.bedtime||''}" style="margin:0" oninput="saveSleepField('bedtime',this.value)">
@@ -254,6 +250,11 @@ function renderSleep() {
           <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">Wake time</div>
           <input class="d-input" type="time" value="${entry.wake||''}" style="margin:0" oninput="saveSleepField('wake',this.value)">
         </div>
+      </div>
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="font-family:var(--serif);font-size:32px;color:var(--accent-b)">${formatSleep(entry.hours)}</div>
+        <div style="font-size:10px;color:var(--text-muted);letter-spacing:1px">TIME ASLEEP${
+          (entry.hours > 0 && !(entry.bedtime && entry.wake)) ? ' \u00b7 SYNCED' : ''}</div>
       </div>
       <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">Sleep quality</div>
       <div class="sl-q-row">${qualOpts}</div>
@@ -268,14 +269,6 @@ function renderSleep() {
     </div>`;
 }
 
-function saveSleepHours(val) {
-  const t = today();
-  if (!sleepLog[t]) sleepLog[t] = {};
-  sleepLog[t].hours = parseFloat(val) || 0;
-  LS.set('hvi_sleep_log', sleepLog);
-  if (window.Arete) window.Arete.emit('sleep:logged', { hours: sleepLog[t].hours });
-  if (typeof track === 'function') track('sleep_logged', { hours: sleepLog[t].hours });
-}
 function setSleepQuality(q) {
   const t = today();
   if (!sleepLog[t]) sleepLog[t] = {};
@@ -283,11 +276,25 @@ function setSleepQuality(q) {
   LS.set('hvi_sleep_log', sleepLog);
   renderSleep();
 }
+// Bedtime and wake are the only inputs; hours falls out of them. Both used to
+// be saved and never read, so setting them changed nothing.
 function saveSleepField(field, val) {
   const t = today();
   if (!sleepLog[t]) sleepLog[t] = {};
   sleepLog[t][field] = val;
+  const h = recalcSleepHours(t);
   LS.set('hvi_sleep_log', sleepLog);
+  if (h === null) return;                    // only one time set so far
+  if (window.Arete) window.Arete.emit('sleep:logged', { hours: h });
+  if (typeof track === 'function') track('sleep_logged', { hours: h });
+  // Repaint the total and the week's bars without stealing focus from the
+  // input the user is still adjusting.
+  const active = document.activeElement && document.activeElement.type === 'time';
+  if (!active) renderSleep();
+  else {
+    const tot = document.querySelector('.da-section [style*="font-size:32px"]');
+    if (tot) tot.textContent = formatSleep(h);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════

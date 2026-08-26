@@ -1431,6 +1431,14 @@ function renderStats() {
           <button class="unit-btn${settings.sounds===false?' unit-btn-active':''}" onclick="settings.sounds=false;LS.set('hvi_settings',settings);renderStats()">Off</button>
         </div>
       </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div style="font-size:14px;color:var(--text)">Ask about sleep daily</div>
+        <div class="unit-toggle">
+          <button class="unit-btn${settings.sleepPrompt!==false?' unit-btn-active':''}" onclick="settings.sleepPrompt=true;LS.set('hvi_settings',settings);renderStats()">On</button>
+          <button class="unit-btn${settings.sleepPrompt===false?' unit-btn-active':''}" onclick="settings.sleepPrompt=false;LS.set('hvi_settings',settings);renderStats()">Off</button>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:14px">Once on the first open of each day, unless it's already logged.</div>
       ${(() => {
         const native = typeof _nativeNotifier === 'function' && !!_nativeNotifier();
         const push = typeof pushSupported === 'function' && pushSupported();

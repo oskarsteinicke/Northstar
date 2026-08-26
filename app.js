@@ -1522,10 +1522,152 @@ async function init() {
       go(view, {}, false);
       // Show weekly recap on Monday (or Sunday afternoon)
       setTimeout(() => checkWeeklyRecap(), 600);
+      setTimeout(() => checkSleepPrompt(), 900);
     })();
   }
   // Handle a leaderboard invite link (?join=CODE)
   _handlePendingJoin();
+}
+
+// ── SLEEP ─────────────────────────────────────────────────────
+// Hours are derived from bedtime and wake time, never typed. Both were already
+// being stored and nothing ever read them, so entering the two times used to
+// change nothing at all.
+function sleepDuration(bedtime, wake) {
+  const mins = (v) => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(v == null ? '' : v).trim());
+    if (!m) return null;
+    const h = +m[1], mi = +m[2];
+    if (h > 23 || mi > 59) return null;
+    return h * 60 + mi;
+  };
+  const b = mins(bedtime), w = mins(wake);
+  if (b === null || w === null) return null;
+  // Sleep nearly always crosses midnight, so a wake time at or before bedtime
+  // means the next morning rather than a negative night.
+  return Math.round((((w - b) + 1440) % 1440) / 6) / 10;
+}
+
+// Only overwrite hours when both times are present. An entry synced from Apple
+// Health or Google Fit carries hours and no times, and must not be zeroed.
+function recalcSleepHours(key) {
+  const e = sleepLog && sleepLog[key];
+  if (!e) return null;
+  const h = sleepDuration(e.bedtime, e.wake);
+  if (h === null) return null;
+  e.hours = h;
+  return h;
+}
+
+function formatSleep(h) {
+  if (!(h > 0)) return '—';
+  const whole = Math.floor(h), m = Math.round((h - whole) * 60);
+  return m ? `${whole}h ${m}m` : `${whole}h`;
+}
+
+// ── DAILY SLEEP PROMPT ────────────────────────────────────────
+// Asked once on the first open of each day, because logging last night is the
+// easiest thing in the app to forget and the hardest to reconstruct later.
+function _sleepPromptDefaults() {
+  // Prefill from the most recent night that has both times, so the usual case
+  // is a glance and one tap rather than setting two clocks from scratch.
+  const keys = Object.keys(sleepLog || {}).sort().reverse();
+  for (const k of keys) {
+    const e = sleepLog[k];
+    if (e && e.bedtime && e.wake) return { bedtime: e.bedtime, wake: e.wake };
+  }
+  return { bedtime: '23:00', wake: '07:00' };
+}
+
+function checkSleepPrompt(_tries) {
+  try {
+    if (!LS.get('hvi_onboarded', false)) return;
+    if (settings && settings.sleepPrompt === false) return;
+    const t = today();
+    if (localStorage.getItem('hvi_sleep_prompt_day') === t) return;   // asked already
+    const e = (sleepLog || {})[t];
+    if (e && e.hours > 0) return;                 // already logged, or synced in
+    if (document.getElementById('sleep-prompt')) return;
+    // Never stack on top of another modal. The weekly recap fires on the same
+    // launch on Mondays; wait it out rather than covering it.
+    const busy = document.getElementById('weekly-recap-modal')
+              || document.getElementById('premium-modal')
+              || document.getElementById('ob-overlay');   // an id, not a class
+    if (busy) {
+      if ((_tries || 0) < 8) setTimeout(() => checkSleepPrompt((_tries || 0) + 1), 2000);
+      return;                                      // not marked seen: tomorrow still asks
+    }
+    showSleepPrompt();
+  } catch (err) { reportError('sleep_prompt', err && err.message); }
+}
+
+function showSleepPrompt() {
+  const d = _sleepPromptDefaults();
+  const t = today();
+  localStorage.setItem('hvi_sleep_prompt_day', t);
+  const modal = document.createElement('div');
+  modal.id = 'sleep-prompt';
+  modal.innerHTML = `
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:4000;display:flex;align-items:center;justify-content:center;padding:24px" onclick="dismissSleepPrompt()">
+      <div style="background:var(--bg);border:1px solid var(--border2);border-radius:24px;padding:28px 24px;max-width:360px;width:100%;text-align:center" onclick="event.stopPropagation()">
+        <div style="font-size:11px;color:var(--accent);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">Last Night</div>
+        <div style="font-family:var(--serif);font-size:26px;color:var(--text);margin-bottom:4px">How did you sleep?</div>
+        <div style="font-size:13px;color:var(--text-dim);margin-bottom:20px">Set the two times. The rest works itself out.</div>
+        <div style="display:flex;gap:12px;margin-bottom:18px">
+          <div style="flex:1;text-align:left">
+            <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">Bedtime</div>
+            <input class="d-input" id="sp-bed" type="time" value="${d.bedtime}" style="margin:0" oninput="updateSleepPromptTotal()">
+          </div>
+          <div style="flex:1;text-align:left">
+            <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px">Wake time</div>
+            <input class="d-input" id="sp-wake" type="time" value="${d.wake}" style="margin:0" oninput="updateSleepPromptTotal()">
+          </div>
+        </div>
+        <div style="font-family:var(--serif);font-size:34px;color:var(--accent-b)" id="sp-total">${formatSleep(sleepDuration(d.bedtime, d.wake))}</div>
+        <div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;margin-bottom:22px">TIME ASLEEP</div>
+        <div style="display:flex;gap:10px">
+          <button class="w-action-btn" style="flex:1;margin:0" onclick="dismissSleepPrompt()">Skip</button>
+          <button class="w-action-btn" style="flex:1;margin:0;background:var(--accent);color:#fff" id="sp-save" onclick="saveSleepPrompt()">Save</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  if (typeof track === 'function') track('sleep_prompt_shown', {});
+}
+
+function updateSleepPromptTotal() {
+  const bed = (document.getElementById('sp-bed') || {}).value;
+  const wake = (document.getElementById('sp-wake') || {}).value;
+  const el = document.getElementById('sp-total');
+  const save = document.getElementById('sp-save');
+  const h = sleepDuration(bed, wake);
+  if (el) el.textContent = formatSleep(h);
+  // Half a time is not an answer; don't let it save a zero.
+  if (save) save.disabled = !(h > 0);
+}
+
+function saveSleepPrompt() {
+  const bed = (document.getElementById('sp-bed') || {}).value;
+  const wake = (document.getElementById('sp-wake') || {}).value;
+  const h = sleepDuration(bed, wake);
+  if (!(h > 0)) return;
+  const t = today();
+  if (!sleepLog[t]) sleepLog[t] = {};
+  sleepLog[t].bedtime = bed;
+  sleepLog[t].wake = wake;
+  recalcSleepHours(t);
+  LS.set('hvi_sleep_log', sleepLog);
+  if (window.Arete) window.Arete.emit('sleep:logged', { hours: sleepLog[t].hours });
+  if (typeof track === 'function') track('sleep_logged', { hours: sleepLog[t].hours, via: 'prompt' });
+  const m = document.getElementById('sleep-prompt');
+  if (m) m.remove();
+  if (curView === 'home' || curView === 'sleep') go(curView, {}, false);
+}
+
+function dismissSleepPrompt() {
+  const m = document.getElementById('sleep-prompt');
+  if (m) m.remove();
+  if (typeof track === 'function') track('sleep_prompt_skipped', {});
 }
 
 // Someone opened a shared invite link. Auto-join the group if signed in; if a
