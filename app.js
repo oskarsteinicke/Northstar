@@ -217,10 +217,10 @@ async function authRefresh() {
   return false;
 }
 
-// ── FOUNDER ACCESS ────────────────────────────────────────────
-// The first 50 accounts keep every premium feature for good. The server owns
-// the decision and the count; this only asks once per account per device and
-// records the answer. Never blocks the UI and never throws.
+// ── FREE ACCESS ───────────────────────────────────────────────
+// Accounts that existed at the cutoff keep every premium feature for good, with
+// no payment step of any kind. The server owns the decision; this only asks
+// once per account per device and records the answer. Never blocks, never throws.
 async function claimFounderAccess() {
   const token = getAccessToken();
   const uid = getCurrentUserId();
@@ -241,7 +241,7 @@ async function claimFounderAccess() {
     localStorage.setItem('hvi_founder_checked', uid);
     if (d.founder) {
       localStorage.setItem('hvi_plan', 'premium');
-      localStorage.setItem('hvi_founder_n', String(d.n));
+      localStorage.setItem('hvi_founder', '1');
       // The grant was written to user_metadata, but this device is still
       // holding the session from before it. Refreshing pulls it in, so the
       // plan survives a cleared cache and shows up on every other device.

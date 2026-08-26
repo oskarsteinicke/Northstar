@@ -367,49 +367,30 @@ async function runReminders(env) {
   } while (cursor);
 }
 
-// ── FOUNDER ACCESS ───────────────────────────────────────────
-// The first FOUNDER_LIMIT accounts keep every premium feature permanently.
+// ── FREE ACCESS ─────────────────────────────────────
+// Every account that existed at the cutoff keeps all premium features, free
+// and permanently. No Stripe involved: the plan is written straight to user
+// metadata, so these users never touch checkout and never appear as customers.
 //
-// The position comes from public.founders, where it is assigned once and then
-// stored. Claiming is keyed on the user id, so calling this repeatedly returns
-// the same number and never consumes a second slot — which matters, because the
-// client calls it on launch.
+// public.founders is the allowlist, seeded once from the SQL editor. This code
+// only reads it. That is deliberate — with no insert path here, nothing
+// reachable from the internet can widen who has access, so the endpoint below
+// cannot grant anything the table does not already say.
 //
-// Identity is taken from the caller's own token and never from the body, the
-// same rule as account deletion. A client cannot claim for another user, and
-// cannot tell the server which number it should get.
-const FOUNDER_LIMIT = 50;
-
-async function founderNumber(userId, env) {
-  const admin = {
-    'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
-    'apikey': env.SUPABASE_SERVICE_KEY,
-    'Content-Type': 'application/json',
-  };
-  const rest = `${SUPABASE_URL}/rest/v1/founders`;
-  const read = async () => {
-    const r = await fetch(`${rest}?user_id=eq.${userId}&select=n`, { headers: admin });
-    if (!r.ok) return null;
-    const rows = await r.json().catch(() => []);
-    return Array.isArray(rows) && rows.length ? rows[0].n : null;
-  };
-
-  // Look before inserting, so a repeat call cannot burn a fresh number.
-  const existing = await read();
-  if (existing !== null) return existing;
-
-  const ins = await fetch(rest, {
-    method: 'POST',
-    headers: { ...admin, 'Prefer': 'return=representation,resolution=ignore-duplicates' },
-    body: JSON.stringify({ user_id: userId }),
-  });
-  if (ins.ok) {
-    const rows = await ins.json().catch(() => []);
-    if (Array.isArray(rows) && rows.length) return rows[0].n;
-  }
-  // Either a concurrent claim won the insert and ours was ignored, or the
-  // write failed. Reading back distinguishes them: a number means we are in.
-  return read();
+// Identity comes from the caller's own token and never from the body, the same
+// rule account deletion uses. A client cannot claim on another user's behalf.
+async function isFounderUser(userId, env) {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/founders?user_id=eq.${userId}&select=user_id`,
+    {
+      headers: {
+        'Authorization': `Bearer ${env.SUPABASE_SERVICE_KEY}`,
+        'apikey': env.SUPABASE_SERVICE_KEY,
+      },
+    });
+  if (!res.ok) return null;                        // null = could not tell
+  const rows = await res.json().catch(() => null);
+  return Array.isArray(rows) ? rows.length > 0 : null;
 }
 
 async function handleFounderClaim(request, env, origin) {
@@ -426,19 +407,19 @@ async function handleFounderClaim(request, env, origin) {
   const userId = me && me.id;
   if (!userId) return jsonResponse({ error: 'Invalid session' }, 401, origin);
 
-  const n = await founderNumber(userId, env);
-  if (n === null) return jsonResponse({ error: 'Could not claim' }, 502, origin);
-  if (n > FOUNDER_LIMIT) {
-    return jsonResponse({ ok: true, founder: false, n, limit: FOUNDER_LIMIT }, 200, origin);
-  }
+  const listed = await isFounderUser(userId, env);
+  // Distinguish "not on the list" from "could not reach the list". Answering
+  // false on a lookup failure would cache a wrong answer on the device and the
+  // user would silently never get their access.
+  if (listed === null) return jsonResponse({ error: 'Lookup failed' }, 502, origin);
+  if (!listed) return jsonResponse({ ok: true, founder: false }, 200, origin);
 
-  // Spread the existing metadata so a paying subscriber's stripe_customer and
-  // anything else already on the account survives the write.
-  const meta = { ...(me.user_metadata || {}), plan: 'premium', founder: true, founder_n: n };
+  // Spread the existing metadata so anything already on the account survives.
+  const meta = { ...(me.user_metadata || {}), plan: 'premium', founder: true };
   if (!(await updateUserMeta(userId, meta, env))) {
     return jsonResponse({ error: 'Could not grant' }, 502, origin);
   }
-  return jsonResponse({ ok: true, founder: true, n, limit: FOUNDER_LIMIT }, 200, origin);
+  return jsonResponse({ ok: true, founder: true }, 200, origin);
 }
 
 // ── ACCOUNT DELETION ──────────────────────────────────────────────────────
