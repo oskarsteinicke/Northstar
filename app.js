@@ -1075,7 +1075,11 @@ async function cancelNativeReminders() {
 // PWA uses real Web Push instead: the worker sends on a schedule and the
 // service worker shows the notification even when Arete is closed. iOS has
 // supported this since 16.4, but only for a Home Screen install.
-const VAPID_PUBLIC_KEY = 'BBn2k9kMM_YpWz4RE4BWwB6g0GFQVtQzJM5XcxlwHOlPEVggoJ-Q9ni5L51r3NehpNAEHmZlC5rXppwYuk2llnM';
+// Rotated 2026-08-26: the previous key had been committed to this repo, which
+// is public. Changing it invalidates every subscription made under the old one,
+// so the mismatch handling below is not optional — without it a device keeps
+// re-syncing an endpoint the push service will never accept again.
+const VAPID_PUBLIC_KEY = 'BOoneX90sRKc6FFHAv9eLy-Bx-YKufBm7HfUKGQ-Y6gsJ-KyeBQzZ2U2oMxt8r6FbMhgpaJCbuhtsirjdoVYmgs';
 
 function _b64ToBytes(b64) {
   const pad = '='.repeat((4 - (b64.length % 4)) % 4);
@@ -1100,6 +1104,53 @@ function isStandalone() {
 // On iPhone, Safari only grants push to a Home Screen install
 function pushNeedsInstall() {
   return /iP(hone|ad|od)/.test(navigator.userAgent || '') && !isStandalone();
+}
+
+function _bytesToB64url(buf) {
+  const b = new Uint8Array(buf);
+  let out = '';
+  for (let i = 0; i < b.length; i++) out += String.fromCharCode(b[i]);
+  return btoa(out).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// True when this subscription was made with a different application server key
+// than the one shipping now. The push service ties the subscription to the key
+// used at subscribe time and rejects anything signed with another, so a
+// rotation leaves existing subscriptions permanently undeliverable. They have
+// to be torn down and remade, not re-synced.
+function _pushKeyChanged(sub) {
+  try {
+    const k = sub && sub.options && sub.options.applicationServerKey;
+    if (k) return _bytesToB64url(k) !== VAPID_PUBLIC_KEY;
+  } catch {}
+  // options.applicationServerKey is not available everywhere; fall back to
+  // what was recorded at subscribe time.
+  try {
+    const seen = localStorage.getItem('hvi_push_key');
+    return !!seen && seen !== VAPID_PUBLIC_KEY;
+  } catch { return false; }
+}
+
+async function _retireSubscription(sub) {
+  // Drop it server-side first. Unsubscribing locally without telling the Worker
+  // leaves a record it will try to deliver to forever.
+  try {
+    await fetch(`${_ACCOUNT_WORKER}/push/unsubscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint: sub.endpoint }),
+    });
+  } catch {}
+  try { await sub.unsubscribe(); } catch {}
+}
+
+async function _subscribeWithCurrentKey(reg) {
+  const sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: _b64ToBytes(VAPID_PUBLIC_KEY),
+  });
+  try { localStorage.setItem('hvi_push_key', VAPID_PUBLIC_KEY); } catch {}
+  return sub;
 }
 
 async function _syncPushSubscription(sub) {
@@ -1129,12 +1180,8 @@ async function enableWebPush() {
     if (perm !== 'granted') return { error: 'Notifications were not allowed.' };
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
-    if (!sub) {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: _b64ToBytes(VAPID_PUBLIC_KEY),
-      });
-    }
+    if (sub && _pushKeyChanged(sub)) { await _retireSubscription(sub); sub = null; }
+    if (!sub) sub = await _subscribeWithCurrentKey(reg);
     if (!(await _syncPushSubscription(sub))) {
       return { error: 'Could not reach the reminder service. Check your connection and try again.' };
     }
@@ -1167,7 +1214,13 @@ async function refreshPushSubscription() {
   if (!settings.notifications || !pushSupported() || _nativeNotifier()) return;
   try {
     const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.getSubscription();
+    let sub = await reg.pushManager.getSubscription();
+    // Migrate a subscription left over from an older key. Permission is already
+    // granted at this point, so this is silent: no prompt, nothing to notice.
+    if (sub && _pushKeyChanged(sub)) {
+      await _retireSubscription(sub);
+      sub = await _subscribeWithCurrentKey(reg).catch(() => null);
+    }
     if (sub) _syncPushSubscription(sub);
   } catch {}
 }

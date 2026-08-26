@@ -199,6 +199,16 @@ module.exports = async function () {
       { HEALTH_KV: gone, VAPID_PRIVATE_JWK: PRIV, VAPID_PUBLIC_KEY: PUB }));
     r.check('410 removes it', !('push:g' in gone._d));
 
+    // After a VAPID rotation the push service rejects every subscription made
+    // under the old key with 403. Retrying those forever would mean the user
+    // never re-subscribes and never gets another reminder.
+    const stale = kv({ 'push:s': JSON.stringify({ endpoint: 'https://push.example/s', tzOffset: -270, sent: {} }) });
+    const w3 = loadWorker(() => Promise.resolve({ ok: false, status: 403 }));
+    await withFrozenNow(() => vm.runInContext('runReminders', w3.sb)(
+      { HEALTH_KV: stale, VAPID_PRIVATE_JWK: PRIV, VAPID_PUBLIC_KEY: PUB }));
+    r.check('403 after a key rotation removes it', !('push:s' in stale._d),
+      '(client would never re-subscribe)');
+
     const flaky = kv({ 'push:x': JSON.stringify({ endpoint: 'https://push.example/x', tzOffset: -270, sent: {} }) });
     const w2 = loadWorker(() => Promise.resolve({ ok: false, status: 500 }));
     await withFrozenNow(() => vm.runInContext('runReminders', w2.sb)(

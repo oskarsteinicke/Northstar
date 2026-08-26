@@ -384,8 +384,12 @@ async function runReminders(env) {
         if (sub.sent && sub.sent[slot] === localDay) continue;  // already sent today
 
         const res = await sendPush(sub.endpoint, env);
-        // The push service reports a dead subscription; stop paying for it
-        if (res.status === 404 || res.status === 410) {
+        // 404/410 mean the subscription is gone. 403 means the push service
+        // will not accept our signature for it — which is what every
+        // subscription made under a previous VAPID key returns after a
+        // rotation. All three are permanent, and dropping the record lets the
+        // client notice and re-subscribe instead of retrying forever.
+        if (res.status === 403 || res.status === 404 || res.status === 410) {
           await env.HEALTH_KV.delete(entry.name);
           pruned++;
           continue;
