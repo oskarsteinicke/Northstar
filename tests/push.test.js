@@ -3,8 +3,12 @@ const fs = require('fs'), vm = require('vm'), path = require('path');
 const { webcrypto } = require('crypto');
 const { APP, createSandbox, run, createReporter } = require('./harness');
 
-const PRIV = '{"kty":"EC","crv":"P-256","x":"GfaT2Qwz9ilbPhETgFbAHqDQYVBW1DMkzldzGXAc6U8","y":"EVggoJ-Q9ni5L51r3NehpNAEHmZlC5rXppwYuk2llnM","d":"gGiajDYA7UBJ84tm_0yqONggxszBdQde1ZcF6j0Yn-w"}';
-const PUB  = 'BBn2k9kMM_YpWz4RE4BWwB6g0GFQVtQzJM5XcxlwHOlPEVggoJ-Q9ni5L51r3NehpNAEHmZlC5rXppwYuk2llnM';
+// A throwaway keypair generated for these tests alone. The suite only needs a
+// valid P-256 pair to prove the JWT is signed and verifiable; it has no reason
+// to know the production key, and this file previously carried the real one
+// into a public repo.
+const PRIV = '{"kty":"EC","crv":"P-256","x":"vFR0_pibm0RbXr7-zMy0O8hM1svGcO3WZzI8kMBLFaY","y":"S-jZRXgwWwhp8dUKGJNSrTOfGxf4CJtBmvLpX9wgNGk","d":"t8qLICcu3bLx_f86jPmyG_sZNkIYaUIjTHQzJmpAZVM"}';
+const PUB  = 'BLxUdP6Ym5tEW16-_szMtDvITNbLxnDt1mcyPJDASxWmS-jZRXgwWwhp8dUKGJNSrTOfGxf4CJtBmvLpX9wgNGk';
 
 function kv(seed) {
   const d = Object.assign({}, seed);
