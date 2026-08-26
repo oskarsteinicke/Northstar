@@ -307,14 +307,25 @@ async function handlePushUnsubscribe(body, env, origin) {
   return jsonResponse({ ok: true }, 200, origin);
 }
 
-// Which slot, if any, the given local time currently falls in. The cron runs
-// on the hour and half hour, so a slot is live for the 30 minutes after it.
+// Which slot, if any, the given local time currently falls in.
+//
+// The window used to be 30 minutes, which with a cron on the hour and half hour
+// gave each slot exactly one chance to land. Miss that single run — a skipped
+// cron, a KV hiccup, a throw — and the reminder was gone for the day, despite
+// the catch below claiming the next run would retry it. It could not.
+//
+// A wider window makes that comment true. Double sends are already impossible:
+// `sent[slot]` records the local day and is checked before every send. Slots
+// are at least five hours apart, so a three hour catch-up never reaches the
+// next one.
+const PUSH_CATCHUP_MIN = 180;
+
 function slotDueAt(localDate) {
   const hh = localDate.getUTCHours(), mm = localDate.getUTCMinutes();
   for (const slot of PUSH_SLOTS) {
     const [sh, sm] = slot.split(':').map(Number);
     const delta = (hh * 60 + mm) - (sh * 60 + sm);
-    if (delta >= 0 && delta < 30) return slot;
+    if (delta >= 0 && delta < PUSH_CATCHUP_MIN) return slot;
   }
   return null;
 }
@@ -330,41 +341,74 @@ async function sendPush(endpoint, env) {
   });
 }
 
+// A run that cannot work must say so. Missing VAPID config used to return here
+// silently on every single cron tick, so months of reminders went nowhere with
+// nothing anywhere to show for it. The breadcrumb is written under a `diag:`
+// prefix, never `push:`, or the reminder loop would list it as a subscriber.
+async function noteReminderRun(env, summary) {
+  try {
+    if (env.HEALTH_KV) {
+      await env.HEALTH_KV.put('diag:last_reminder_run',
+        JSON.stringify({ at: new Date().toISOString(), ...summary }),
+        { expirationTtl: 7 * 86400 });
+    }
+  } catch {}
+}
+
 async function runReminders(env) {
-  if (!env.HEALTH_KV || !env.VAPID_PRIVATE_JWK || !env.VAPID_PUBLIC_KEY) return;
+  const missing = ['HEALTH_KV', 'VAPID_PRIVATE_JWK', 'VAPID_PUBLIC_KEY'].filter(k => !env[k]);
+  if (missing.length) {
+    console.error('[reminders] not configured, nothing sent. Missing:', missing.join(', '));
+    await noteReminderRun(env, { ok: false, missing });
+    return;
+  }
   const now = Date.now();
+  let seen = 0, sent = 0, pruned = 0, failed = 0;
   let cursor;
   do {
     const page = await env.HEALTH_KV.list({ prefix: 'push:', cursor });
     for (const entry of page.keys) {
-      const raw = await env.HEALTH_KV.get(entry.name);
-      if (!raw) continue;
-      let sub;
-      try { sub = JSON.parse(raw); } catch { continue; }
-      if (!sub.endpoint) continue;
-
-      const local = new Date(now + (sub.tzOffset || 0) * 60000);
-      const slot = slotDueAt(local);
-      if (!slot) continue;
-      const localDay = local.toISOString().slice(0, 10);
-      if (sub.sent && sub.sent[slot] === localDay) continue;  // already sent today
-
+      // One unreadable record must not end the run for everybody behind it.
       try {
+        const raw = await env.HEALTH_KV.get(entry.name);
+        if (!raw) continue;
+        let sub;
+        try { sub = JSON.parse(raw); } catch { continue; }
+        if (!sub.endpoint) continue;
+        seen++;
+
+        const local = new Date(now + (sub.tzOffset || 0) * 60000);
+        const slot = slotDueAt(local);
+        if (!slot) continue;
+        const localDay = local.toISOString().slice(0, 10);
+        if (sub.sent && sub.sent[slot] === localDay) continue;  // already sent today
+
         const res = await sendPush(sub.endpoint, env);
         // The push service reports a dead subscription; stop paying for it
         if (res.status === 404 || res.status === 410) {
           await env.HEALTH_KV.delete(entry.name);
+          pruned++;
           continue;
         }
         if (res.ok || res.status === 201) {
           sub.sent = sub.sent || {};
           sub.sent[slot] = localDay;
           await env.HEALTH_KV.put(entry.name, JSON.stringify(sub));
+          sent++;
+        } else {
+          failed++;
+          console.error('[reminders] push rejected', res.status);
         }
-      } catch (e) { /* transient: the next run retries */ }
+      } catch (e) {
+        // Genuinely transient now: the window is wide enough that the next run
+        // gets another attempt at the same slot.
+        failed++;
+        console.error('[reminders] subscriber failed:', e && e.message);
+      }
     }
     cursor = page.list_complete ? null : page.cursor;
   } while (cursor);
+  await noteReminderRun(env, { ok: true, seen, sent, pruned, failed });
 }
 
 // ── FREE ACCESS ─────────────────────────────────────

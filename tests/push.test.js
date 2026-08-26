@@ -64,11 +64,93 @@ module.exports = async function () {
     const due = iso => vm.runInContext('slotDueAt', sb)(new Date(iso));
     r.check('07:30 exactly', due('2026-07-30T07:30:00Z') === '07:30');
     r.check('07:59 still inside', due('2026-07-30T07:59:00Z') === '07:30');
-    r.check('08:00 has passed', due('2026-07-30T08:00:00Z') === null);
     r.check('07:29 not yet', due('2026-07-30T07:29:00Z') === null);
     r.check('midday', due('2026-07-30T12:45:00Z') === '12:30');
     r.check('evening', due('2026-07-30T20:30:00Z') === '20:30');
     r.check('3am has no slot', due('2026-07-30T03:00:00Z') === null);
+  }
+
+  // The window was 30 minutes and the cron runs every 30 minutes, so each slot
+  // had exactly one chance to land. A single skipped run lost the reminder for
+  // the whole day, while the code claimed the next run would retry it.
+  r.section('a missed run can still catch up');
+  {
+    const { sb } = loadWorker(accepted);
+    const due = iso => vm.runInContext('slotDueAt', sb)(new Date(iso));
+    r.check('08:00 still catches the 07:30 slot', due('2026-07-30T08:00:00Z') === '07:30',
+      '(one missed cron run loses the day)');
+    r.check('two hours late still counts', due('2026-07-30T09:30:00Z') === '07:30');
+    r.check('but it gives up eventually', due('2026-07-30T10:31:00Z') === null);
+    // Catch-up must never run into the following slot.
+    r.check('never bleeds into the next slot', due('2026-07-30T12:30:00Z') === '12:30');
+    r.check('and the last slot does not wrap past midnight', due('2026-07-30T23:31:00Z') === null);
+  }
+
+  r.section('catching up still cannot double-send');
+  {
+    const store = kv({ 'push:a': JSON.stringify({
+      endpoint: 'https://push.example/a', tzOffset: -270, sent: { '07:30': '2026-07-30' } }) });
+    const { sb, calls } = loadWorker(accepted);
+    // 90 minutes past the slot: inside the new window, already delivered.
+    const late = Date.UTC(2026, 6, 30, 13, 30, 0);
+    const real = Date.now; Date.now = () => late;
+    try {
+      await vm.runInContext('runReminders', sb)(
+        { HEALTH_KV: store, VAPID_PRIVATE_JWK: PRIV, VAPID_PUBLIC_KEY: PUB });
+    } finally { Date.now = real; }
+    r.check('a delivered slot is not resent during catch-up',
+      calls.filter(c => c.url.includes('push.example')).length === 0, '(duplicate reminder)');
+  }
+
+  // This is the bug that made every reminder silently vanish: the keys were
+  // never bound, so the guard returned on every tick with nothing to show.
+  r.section('missing config is reported, not swallowed');
+  {
+    const store = kv({ 'push:a': JSON.stringify({
+      endpoint: 'https://push.example/a', tzOffset: -270, sent: {} }) });
+    const { sb, calls } = loadWorker(accepted);
+    await withFrozenNow(() => vm.runInContext('runReminders', sb)({ HEALTH_KV: store }));
+    r.check('nothing is sent without keys',
+      calls.filter(c => c.url.includes('push.example')).length === 0);
+    const diag = JSON.parse(store._d['diag:last_reminder_run'] || '{}');
+    r.check('the run leaves a breadcrumb', !!diag.at, '(failure invisible again)');
+    r.check('naming what is missing', (diag.missing || []).includes('VAPID_PRIVATE_JWK'),
+      `(${JSON.stringify(diag.missing)})`);
+    r.check('the breadcrumb is not mistaken for a subscriber',
+      !Object.keys(store._d).some(k => k.startsWith('push:') && k.includes('diag')));
+  }
+
+  r.section('a healthy run records what it did');
+  {
+    const store = kv({ 'push:a': JSON.stringify({
+      endpoint: 'https://push.example/a', tzOffset: -270, sent: {} }) });
+    const { sb } = loadWorker(accepted);
+    await withFrozenNow(() => vm.runInContext('runReminders', sb)(
+      { HEALTH_KV: store, VAPID_PRIVATE_JWK: PRIV, VAPID_PUBLIC_KEY: PUB }));
+    const diag = JSON.parse(store._d['diag:last_reminder_run'] || '{}');
+    r.check('ok', diag.ok === true);
+    r.check('counts the send', diag.sent === 1, `(sent=${diag.sent})`);
+  }
+
+  // A single unreadable record used to throw out of the loop and silently end
+  // the run, so every subscriber listed after it got nothing.
+  r.section('one broken subscriber does not stop the rest');
+  {
+    const store = kv({
+      'push:a': JSON.stringify({ endpoint: 'https://push.example/a', tzOffset: -270, sent: {} }),
+      'push:b': JSON.stringify({ endpoint: 'https://push.example/b', tzOffset: -270, sent: {} }),
+    });
+    const boom = new Set(['https://push.example/a']);
+    const { sb, calls } = loadWorker(u =>
+      boom.has(u) ? Promise.reject(new Error('network went away')) : accepted());
+    await withFrozenNow(() => vm.runInContext('runReminders', sb)(
+      { HEALTH_KV: store, VAPID_PRIVATE_JWK: PRIV, VAPID_PUBLIC_KEY: PUB }));
+    r.check('the healthy subscriber still gets theirs',
+      calls.some(c => c.url.endsWith('/b')), '(one failure ended the run)');
+    r.check('the failure is counted',
+      JSON.parse(store._d['diag:last_reminder_run']).failed === 1);
+    r.check('and the failed one is not marked sent',
+      !JSON.parse(store._d['push:a']).sent['07:30']);
   }
 
   r.section('delivery follows each subscriber\'s local time');
