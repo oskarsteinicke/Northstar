@@ -235,22 +235,58 @@ module.exports = async function () {
       { HEALTH_KV: gone, VAPID_PRIVATE_JWK: PRIV, VAPID_PUBLIC_KEY: PUB }));
     r.check('410 removes it', !('push:g' in gone._d));
 
-    // After a VAPID rotation the push service rejects every subscription made
-    // under the old key with 403. Retrying those forever would mean the user
-    // never re-subscribes and never gets another reminder.
-    const stale = kv({ 'push:s': JSON.stringify({ endpoint: 'https://push.example/s', tzOffset: -270, sent: {} }) });
-    const w3 = loadWorker(() => Promise.resolve({ ok: false, status: 403 }));
-    await withFrozenNow(() => vm.runInContext('runReminders', w3.sb)(
-      { HEALTH_KV: stale, VAPID_PRIVATE_JWK: PRIV, VAPID_PUBLIC_KEY: PUB }));
-    r.check('403 after a key rotation removes it', !('push:s' in stale._d),
-      '(client would never re-subscribe)');
-
     const flaky = kv({ 'push:x': JSON.stringify({ endpoint: 'https://push.example/x', tzOffset: -270, sent: {} }) });
     const w2 = loadWorker(() => Promise.resolve({ ok: false, status: 500 }));
     await withFrozenNow(() => vm.runInContext('runReminders', w2.sb)(
       { HEALTH_KV: flaky, VAPID_PRIVATE_JWK: PRIV, VAPID_PUBLIC_KEY: PUB }));
     r.check('a 500 keeps it for next time', 'push:x' in flaky._d);
     r.check('and is not marked sent', !JSON.parse(flaky._d['push:x']).sent['07:30']);
+  }
+
+  // Apple answers 400 for a subscription made under a VAPID key we no longer
+  // hold — measured after the real rotation. But 400 is also what a malformed
+  // request returns, so acting on a single one would let a fault in our own
+  // request format unsubscribe everybody in one run.
+  r.section('an ambiguous rejection has to repeat before it prunes');
+  {
+    const store = kv({ 'push:s': JSON.stringify({
+      endpoint: 'https://web.push.apple.com/s', tzOffset: -270, sent: {} }) });
+    const env = { HEALTH_KV: store, VAPID_PRIVATE_JWK: PRIV, VAPID_PUBLIC_KEY: PUB };
+    const { sb } = loadWorker(() => Promise.resolve({ ok: false, status: 400 }));
+
+    await withFrozenNow(() => vm.runInContext('runReminders', sb)(env));
+    r.check('still there after one 400', 'push:s' in store._d,
+      '(one bad request would unsubscribe everyone)');
+    r.check('the failure is remembered', JSON.parse(store._d['push:s']).fails === 1);
+
+    await withFrozenNow(() => vm.runInContext('runReminders', sb)(env));
+    r.check('still there after two', 'push:s' in store._d);
+
+    await withFrozenNow(() => vm.runInContext('runReminders', sb)(env));
+    r.check('gone on the third', !('push:s' in store._d),
+      '(a stale subscription would retry forever)');
+  }
+
+  r.section('a success clears the failure count');
+  {
+    const store = kv({ 'push:s': JSON.stringify({
+      endpoint: 'https://web.push.apple.com/s', tzOffset: -270, sent: {}, fails: 2 }) });
+    const { sb } = loadWorker(accepted);
+    await withFrozenNow(() => vm.runInContext('runReminders', sb)(
+      { HEALTH_KV: store, VAPID_PRIVATE_JWK: PRIV, VAPID_PUBLIC_KEY: PUB }));
+    r.check('kept', 'push:s' in store._d);
+    r.check('count reset', JSON.parse(store._d['push:s']).fails === 0,
+      '(two old blips plus one new one would prune a live subscription)');
+  }
+
+  r.section('an explicitly gone subscription still goes immediately');
+  {
+    const store = kv({ 'push:g': JSON.stringify({
+      endpoint: 'https://web.push.apple.com/g', tzOffset: -270, sent: {} }) });
+    const { sb } = loadWorker(() => Promise.resolve({ ok: false, status: 410 }));
+    await withFrozenNow(() => vm.runInContext('runReminders', sb)(
+      { HEALTH_KV: store, VAPID_PRIVATE_JWK: PRIV, VAPID_PUBLIC_KEY: PUB }));
+    r.check('410 needs no corroboration', !('push:g' in store._d));
   }
 
   r.section('subscribe and unsubscribe');

@@ -320,6 +320,11 @@ async function handlePushUnsubscribe(body, env, origin) {
 // next one.
 const PUSH_CATCHUP_MIN = 180;
 
+// How many times an ambiguous rejection must repeat before the subscription is
+// dropped. With a 30 minute cron and a 3 hour window, a genuinely stale record
+// reaches this inside a single slot.
+const PUSH_FAIL_LIMIT = 3;
+
 function slotDueAt(localDate) {
   const hh = localDate.getUTCHours(), mm = localDate.getUTCMinutes();
   for (const slot of PUSH_SLOTS) {
@@ -397,12 +402,9 @@ async function runReminders(env) {
         try { host = new URL(sub.endpoint).host; } catch {}
         const res = await sendPush(sub.endpoint, env);
         noteStatus(host, res.status);
-        // 404/410 mean the subscription is gone. 403 means the push service
-        // will not accept our signature for it — which is what every
-        // subscription made under a previous VAPID key returns after a
-        // rotation. All three are permanent, and dropping the record lets the
-        // client notice and re-subscribe instead of retrying forever.
-        if (res.status === 403 || res.status === 404 || res.status === 410) {
+        // 404 and 410 are unambiguous: the push service is telling us the
+        // subscription no longer exists. Drop it at once.
+        if (res.status === 404 || res.status === 410) {
           await env.HEALTH_KV.delete(entry.name);
           pruned++;
           continue;
@@ -410,12 +412,32 @@ async function runReminders(env) {
         if (res.ok || res.status === 201) {
           sub.sent = sub.sent || {};
           sub.sent[slot] = localDay;
+          sub.fails = 0;
           await env.HEALTH_KV.put(entry.name, JSON.stringify(sub));
           sent++;
-        } else {
-          failed++;
-          console.error('[reminders] push rejected', res.status);
+          continue;
         }
+        // 400 and 403 are what Apple returns for a subscription created under
+        // a VAPID key we no longer hold — measured, not assumed: after the
+        // rotation the stale records came back "web.push.apple.com 400".
+        //
+        // They are also what a malformed request would return. Pruning on the
+        // first one would mean a mistake in our own request format silently
+        // unsubscribing every user in a single run, so require the rejection to
+        // repeat before acting. A genuinely stale subscription reaches the
+        // limit within one slot; a transient or self-inflicted fault shows up
+        // in the diagnostics first, with the subscriptions still intact.
+        failed++;
+        if (res.status === 400 || res.status === 403) {
+          sub.fails = (sub.fails || 0) + 1;
+          if (sub.fails >= PUSH_FAIL_LIMIT) {
+            await env.HEALTH_KV.delete(entry.name);
+            pruned++;
+          } else {
+            await env.HEALTH_KV.put(entry.name, JSON.stringify(sub));
+          }
+        }
+        console.error('[reminders] push rejected', res.status);
       } catch (e) {
         // Genuinely transient now: the window is wide enough that the next run
         // gets another attempt at the same slot.
