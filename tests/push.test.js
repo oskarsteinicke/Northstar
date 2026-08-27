@@ -124,6 +124,42 @@ module.exports = async function () {
       !Object.keys(store._d).some(k => k.startsWith('push:') && k.includes('diag')));
   }
 
+  // A bare failure count could not tell "Apple rejected our signature" from
+  // "the network blipped" — which is the whole question after a key rotation.
+  r.section('the run records what each push service answered');
+  {
+    const store = kv({
+      'push:a': JSON.stringify({ endpoint: 'https://web.push.apple.com/aaa', tzOffset: -270, sent: {} }),
+      'push:b': JSON.stringify({ endpoint: 'https://fcm.googleapis.com/bbb',  tzOffset: -270, sent: {} }),
+    });
+    const { sb } = loadWorker(u =>
+      Promise.resolve(u.includes('apple') ? { ok: false, status: 400 } : { ok: true, status: 201 }));
+    await withFrozenNow(() => vm.runInContext('runReminders', sb)(
+      { HEALTH_KV: store, VAPID_PRIVATE_JWK: PRIV, VAPID_PUBLIC_KEY: PUB }));
+    const d = JSON.parse(store._d['diag:last_reminder_run']);
+    r.check('Apple\'s rejection is attributed to Apple',
+      d.statuses['web.push.apple.com 400'] === 1, `(${JSON.stringify(d.statuses)})`);
+    r.check('and the successful one to its own host',
+      d.statuses['fcm.googleapis.com 201'] === 1, `(${JSON.stringify(d.statuses)})`);
+    // The rest of a push endpoint is a capability URL: anyone holding it can
+    // push to that device. Only the host may be recorded.
+    const blob = store._d['diag:last_reminder_run'];
+    r.check('no endpoint path is written to the breadcrumb',
+      !blob.includes('/aaa') && !blob.includes('/bbb'), '(capability URL leaked into diagnostics)');
+  }
+
+  r.section('a thrown send is distinguishable from a rejection');
+  {
+    const store = kv({ 'push:a': JSON.stringify({
+      endpoint: 'https://web.push.apple.com/a', tzOffset: -270, sent: {} }) });
+    const { sb } = loadWorker(() => Promise.reject(new Error('connect timeout')));
+    await withFrozenNow(() => vm.runInContext('runReminders', sb)(
+      { HEALTH_KV: store, VAPID_PRIVATE_JWK: PRIV, VAPID_PUBLIC_KEY: PUB }));
+    const d = JSON.parse(store._d['diag:last_reminder_run']);
+    r.check('recorded as a throw, not a status',
+      Object.keys(d.statuses).some(k => k.startsWith('threw ')), `(${JSON.stringify(d.statuses)})`);
+  }
+
   r.section('a healthy run records what it did');
   {
     const store = kv({ 'push:a': JSON.stringify({

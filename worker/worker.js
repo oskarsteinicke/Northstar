@@ -364,6 +364,16 @@ async function runReminders(env) {
   }
   const now = Date.now();
   let seen = 0, sent = 0, pruned = 0, failed = 0;
+  // What each push service actually answered, keyed by host and status. Counts
+  // alone could not distinguish "Apple rejected the signature" from "the network
+  // blipped", which is exactly the question a key rotation raises. The host is
+  // safe to record; the rest of the endpoint is a capability URL and is not.
+  const statuses = {};
+  const noteStatus = (host, code) => {
+    const k = `${host} ${code}`;
+    if (statuses[k] === undefined && Object.keys(statuses).length >= 20) return;
+    statuses[k] = (statuses[k] || 0) + 1;
+  };
   let cursor;
   do {
     const page = await env.HEALTH_KV.list({ prefix: 'push:', cursor });
@@ -383,7 +393,10 @@ async function runReminders(env) {
         const localDay = local.toISOString().slice(0, 10);
         if (sub.sent && sub.sent[slot] === localDay) continue;  // already sent today
 
+        let host = '';
+        try { host = new URL(sub.endpoint).host; } catch {}
         const res = await sendPush(sub.endpoint, env);
+        noteStatus(host, res.status);
         // 404/410 mean the subscription is gone. 403 means the push service
         // will not accept our signature for it — which is what every
         // subscription made under a previous VAPID key returns after a
@@ -407,12 +420,13 @@ async function runReminders(env) {
         // Genuinely transient now: the window is wide enough that the next run
         // gets another attempt at the same slot.
         failed++;
+        noteStatus('threw', (e && e.message ? String(e.message) : 'unknown').slice(0, 40));
         console.error('[reminders] subscriber failed:', e && e.message);
       }
     }
     cursor = page.list_complete ? null : page.cursor;
   } while (cursor);
-  await noteReminderRun(env, { ok: true, seen, sent, pruned, failed });
+  await noteReminderRun(env, { ok: true, seen, sent, pruned, failed, statuses });
 }
 
 // ── FREE ACCESS ─────────────────────────────────────
