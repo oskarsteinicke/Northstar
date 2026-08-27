@@ -158,6 +158,44 @@ module.exports = function () {
       '(linked habits would never auto-complete)');
   }
 
+  r.section('the prompt asks about quality');
+  {
+    const s = sb();
+    const key = t(s);
+    run(s, 'showSleepPrompt()');
+    const html = run(s, `document.getElementById('sleep-prompt').innerHTML`) || '';
+    r.check('a 1-5 rating is offered', /setSleepPromptQuality\(5\)/.test(html),
+      '(quality never asked)');
+    run(s, `document.getElementById('sp-bed').value='23:00';
+            document.getElementById('sp-wake').value='07:00';
+            setSleepPromptQuality(4); saveSleepPrompt();`);
+    r.check('the rating is stored', run(s, `sleepLog['${key}'].quality`) === 4);
+    r.check('alongside the hours', run(s, `sleepLog['${key}'].hours`) === 8);
+  }
+
+  // Storing 0 would read as a recorded answer of "worst possible" rather than
+  // "not asked", and quality is 40% of the readiness sleep score.
+  r.section('skipping the rating records no rating');
+  {
+    const s = sb();
+    const key = t(s);
+    run(s, 'showSleepPrompt()');
+    run(s, `document.getElementById('sp-bed').value='23:00';
+            document.getElementById('sp-wake').value='07:00';
+            saveSleepPrompt();`);
+    r.check('no quality key is written', run(s, `sleepLog['${key}'].quality === undefined`) === true,
+      '(an unanswered rating saved as zero)');
+  }
+
+  r.section('the rating does not leak between nights');
+  {
+    const s = sb();
+    run(s, 'showSleepPrompt(); setSleepPromptQuality(2); dismissSleepPrompt();');
+    run(s, `localStorage.removeItem('hvi_sleep_prompt_day'); showSleepPrompt();`);
+    r.check('it reopens unset', run(s, '_sleepPromptQuality') === 0,
+      '(yesterday\'s rating carried over)');
+  }
+
   r.section('the total reads as time, not a decimal');
   {
     const s = sb();

@@ -1657,6 +1657,7 @@ function checkSleepPrompt(_tries) {
 function showSleepPrompt() {
   const d = _sleepPromptDefaults();
   const t = today();
+  _sleepPromptQuality = ((sleepLog[t] || {}).quality) || 0;   // fresh each time it opens
   localStorage.setItem('hvi_sleep_prompt_day', t);
   const modal = document.createElement('div');
   modal.id = 'sleep-prompt';
@@ -1677,7 +1678,11 @@ function showSleepPrompt() {
           </div>
         </div>
         <div style="font-family:var(--serif);font-size:34px;color:var(--accent-b)" id="sp-total">${formatSleep(sleepDuration(d.bedtime, d.wake))}</div>
-        <div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;margin-bottom:22px">TIME ASLEEP</div>
+        <div style="font-size:10px;color:var(--text-muted);letter-spacing:1px;margin-bottom:18px">TIME ASLEEP</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;text-align:left">How well did you sleep?</div>
+        <div class="sl-q-row" id="sp-quality" style="margin-bottom:22px">
+          ${[1,2,3,4,5].map(q => `<button class="sl-q-btn" data-q="${q}" onclick="setSleepPromptQuality(${q})">${q}</button>`).join('')}
+        </div>
         <div style="display:flex;gap:10px">
           <button class="w-action-btn" style="flex:1;margin:0" onclick="dismissSleepPrompt()">Skip</button>
           <button class="w-action-btn" style="flex:1;margin:0;background:var(--accent);color:#fff" id="sp-save" onclick="saveSleepPrompt()">Save</button>
@@ -1686,6 +1691,20 @@ function showSleepPrompt() {
     </div>`;
   document.body.appendChild(modal);
   if (typeof track === 'function') track('sleep_prompt_shown', {});
+}
+
+// Quality is optional here on purpose: the prompt has to stay a two-tap job or
+// it gets skipped. Readiness scores on whatever was actually recorded, so
+// leaving it unset costs nothing.
+let _sleepPromptQuality = 0;
+
+function setSleepPromptQuality(q) {
+  _sleepPromptQuality = (_sleepPromptQuality === q) ? 0 : q;   // tap again to clear
+  const row = document.getElementById('sp-quality');
+  if (!row || !row.querySelectorAll) return;
+  Array.prototype.forEach.call(row.querySelectorAll('.sl-q-btn'), b => {
+    b.classList.toggle('active', Number(b.getAttribute('data-q')) === _sleepPromptQuality);
+  });
 }
 
 function updateSleepPromptTotal() {
@@ -1708,6 +1727,9 @@ function saveSleepPrompt() {
   if (!sleepLog[t]) sleepLog[t] = {};
   sleepLog[t].bedtime = bed;
   sleepLog[t].wake = wake;
+  // Only write a rating that was actually given. Storing 0 would look like a
+  // recorded answer of "worst possible" rather than "not asked".
+  if (_sleepPromptQuality > 0) sleepLog[t].quality = _sleepPromptQuality;
   recalcSleepHours(t);
   LS.set('hvi_sleep_log', sleepLog);
   if (window.Arete) window.Arete.emit('sleep:logged', { hours: sleepLog[t].hours });

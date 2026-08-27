@@ -88,10 +88,19 @@ function getReadiness() {
   const slp = getRecentSleep();
   const whoop = (typeof slp.whoopRecovery === 'number') ? slp.whoopRecovery : null;
 
-  // Sleep score 0..1 (hours weighted 60%, quality 40%); neutral if unlogged
+  // Sleep score 0..1 (hours weighted 60%, quality 40%); neutral if unlogged.
+  //
+  // Only score on what was actually recorded. Treating an unrecorded quality as
+  // zero capped the score at 0.6 for any night without one — which is every
+  // night synced from Apple Health or Google Fit, since those report duration
+  // and no rating. That read as poor recovery when nothing was wrong.
   let sleepScore = 0.6;
-  if (slp.hours || slp.quality) {
-    sleepScore = _cnClamp01((slp.hours || 0) / 8) * 0.6 + _cnClamp01((slp.quality || 0) / 5) * 0.4;
+  {
+    const h = slp.hours ? _cnClamp01(slp.hours / 8) : null;
+    const q = slp.quality ? _cnClamp01(slp.quality / 5) : null;
+    if (h !== null && q !== null) sleepScore = h * 0.6 + q * 0.4;
+    else if (h !== null) sleepScore = h;
+    else if (q !== null) sleepScore = q;
   }
 
   // Training-load score 0..1 (inverse of fatigue) from existing recovery logic

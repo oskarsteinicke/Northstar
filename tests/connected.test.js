@@ -30,6 +30,28 @@ const H = [{ id: 'h1', name: 'Sleep 7h', schedule: 'daily' }];
 module.exports = function () {
   const r = createReporter('connected');
 
+  // Quality is 40% of the sleep score. Counting an unrecorded one as zero
+  // capped every synced night at 0.6 and read as poor recovery.
+  r.section('sleep scores on what was actually recorded');
+  {
+    const mk = (entry) => {
+      const s2 = sb({ hvi_habits: '[]', hvi_log: '{}',
+        hvi_sleep_log: JSON.stringify({ [dk(0)]: entry }) });
+      run(s2, `sleepLog=JSON.parse(localStorage.getItem('hvi_sleep_log'));
+               workoutLog={}; mealLog={}; dietMeta={}; habits=[]; log={};`);
+      return run(s2, 'getReadiness().factors.sleep');
+    };
+    const both = mk({ hours: 8, quality: 5 });
+    const hoursOnly = mk({ hours: 8 });
+    r.check('eight hours with a top rating scores full', both === 1, `(${both})`);
+    r.check('eight hours with no rating is not punished for it',
+      hoursOnly === 1, `(${hoursOnly} — unrecorded quality counted as zero)`);
+    const poor = mk({ hours: 8, quality: 1 });
+    r.check('but a genuinely poor rating still lowers it', poor < hoursOnly, `(${poor})`);
+    const qualityOnly = mk({ quality: 5 });
+    r.check('a rating with no hours scores on the rating', qualityOnly === 1, `(${qualityOnly})`);
+  }
+
   // Readiness was computed from sleep, load, habits and nutrition but only ever
   // shown on the home screen — the workout screen never saw it.
   r.section('readiness becomes advice for today\'s session');

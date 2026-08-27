@@ -45,7 +45,7 @@
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=159">
+  <link rel="stylesheet" href="style.css?v=160">
 </head>
 <body>
 <div id="grain" aria-hidden="true"></div>
@@ -108,29 +108,29 @@
     </button>
   </nav>
 </div>
-<script src="data.js?v=159"></script>
-<script src="app.js?v=159"></script>
-<script src="connect.js?v=159"></script>
-<script src="premium.js?v=159"></script>
-<script src="workout.js?v=159"></script>
-<script src="diet.js?v=159"></script>
+<script src="data.js?v=160"></script>
+<script src="app.js?v=160"></script>
+<script src="connect.js?v=160"></script>
+<script src="premium.js?v=160"></script>
+<script src="workout.js?v=160"></script>
+<script src="diet.js?v=160"></script>
 <script>
 // Stub coach functions until lazy-loaded
 if(typeof openCoach==='undefined'){window.openCoach=function(){};window.closeCoach=function(){};window.sendCoachMsg=function(){};window.clearCoachHistory=function(){}}
 // Lazy-load coach + social after first paint for faster startup
 (window.requestIdleCallback||function(cb){setTimeout(cb,800)})(function(){
-  var s1=document.createElement('script');s1.src='coach.js?v=159';document.body.appendChild(s1);
-  var s2=document.createElement('script');s2.src='social.js?v=159';document.body.appendChild(s2);
-  var s3=document.createElement('script');s3.src='bodymap.js?v=159';document.body.appendChild(s3);
+  var s1=document.createElement('script');s1.src='coach.js?v=160';document.body.appendChild(s1);
+  var s2=document.createElement('script');s2.src='social.js?v=160';document.body.appendChild(s2);
+  var s3=document.createElement('script');s3.src='bodymap.js?v=160';document.body.appendChild(s3);
 });
 </script>
-<script src="integrations.js?v=159"></script>
-<script src="profile.js?v=159"></script>
+<script src="integrations.js?v=160"></script>
+<script src="profile.js?v=160"></script>
 <script>
   // No service worker inside the native (Capacitor) app — assets are bundled locally
   if ('serviceWorker' in navigator && !window.Capacitor) {
     // Purge ALL old caches on load to ensure fresh files
-    caches.keys().then(ks => ks.filter(k => k !== 'arete-v130').forEach(k => caches.delete(k)));
+    caches.keys().then(ks => ks.filter(k => k !== 'arete-v131').forEach(k => caches.delete(k)));
     navigator.serviceWorker.register('/service-worker.js').then(reg => {
       reg.update();
     });
