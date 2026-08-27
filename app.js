@@ -1873,6 +1873,15 @@ function checkReset() {
 }
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────
+// Screens owned by scripts that load lazily (social.js). Named as strings and
+// resolved off the global object, so a navigation that lands before the script
+// does waits for it instead of throwing.
+const LAZY_VIEWS = {
+  library: 'renderLibrary', sleep: 'renderSleep',
+  challenges: 'renderChallenges', leaderboard: 'renderLeaderboard',
+};
+const _lazyViewTries = {};
+
 function go(view, params = {}, pushState = true) {
   // Paywall: gate premium sections for free (post-trial) users
   if (typeof isPremium === 'function' && !isPremium()) {
@@ -1900,15 +1909,40 @@ function go(view, params = {}, pushState = true) {
   void viewEl.offsetWidth;
   viewEl.classList.add('view-slide-in');
 
+  // Only screens whose script is loaded eagerly may be named directly here. An
+  // object literal resolves every identifier the moment it is built, so listing
+  // a lazily-loaded screen alongside these threw ReferenceError on any
+  // navigation that happened before its script arrived — taking down the whole
+  // render, including the screens that were ready. LAZY_VIEWS below is looked
+  // up on the global object instead, which yields undefined rather than
+  // throwing.
   const renders = {
     home: renderHome, pillar: renderPillar, habits: renderHabits, habitCreate: renderHabitCreate, stats: renderStats,
     workout: renderWorkout, workoutPicker: renderWorkoutPicker, workoutActive: renderWorkoutActive, workoutHistory: renderWorkoutHistory, workoutBuilder: renderWorkoutBuilder, exerciseBrowser: renderExerciseBrowser, prHistory: renderPRHistory, workoutProgress: renderWorkoutProgress,
     diet: renderDiet, dietAddMeal: renderDietAddMeal, dietRecipes: renderDietRecipes, dietRecipeDetail: renderDietRecipeDetail, dietGoals: renderDietGoals, dietTrend: renderDietTrend, dietTDEE: renderDietTDEE,
-    library: renderLibrary,
-    sleep: renderSleep, progressPhotos: renderProgressPhotos, challenges: renderChallenges, leaderboard: renderLeaderboard, character: renderCharacter, goals: renderGoals,
+    progressPhotos: renderProgressPhotos, character: renderCharacter, goals: renderGoals,
     calendar: () => { window._statsSubView = 'calendar'; renderStats(); },
   };
-  (renders[view] || renderHome)();
+
+  let render = renders[view];
+  if (!render && LAZY_VIEWS[view]) {
+    render = window[LAZY_VIEWS[view]];
+    if (typeof render !== 'function') {
+      // The owning script is still in flight. Wait for it rather than falling
+      // through to home, which would silently discard the navigation.
+      viewEl.innerHTML = '<div class="view-loading" style="padding:60px 24px;text-align:center;color:var(--text-muted)">Loading\u2026</div>';
+      const tries = (_lazyViewTries[view] || 0) + 1;
+      _lazyViewTries[view] = tries;
+      if (tries <= 40) {                       // ~6s, then give up rather than spin
+        setTimeout(() => { if (curView === view) go(view, params, false); }, 150);
+        return;
+      }
+      reportError('lazy-view', 'script never arrived', { src: LAZY_VIEWS[view] });
+      render = renderHome;
+    }
+    _lazyViewTries[view] = 0;
+  }
+  (typeof render === 'function' ? render : renderHome)();
 }
 
 window.addEventListener('popstate', e => {
