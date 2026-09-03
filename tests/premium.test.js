@@ -87,5 +87,60 @@ module.exports = function () {
     r.check('no paywall for premium', run(p, '_paywallShown') === 0);
   }
 
+  // hvi_plan is a cache, not a grant. No client-side check can stop someone
+  // typing it into devtools — what this stops is the forged flag surviving.
+  r.section('a local premium flag the server does not back is cleared');
+  {
+    const sess = extra => JSON.stringify({ access_token: 't', refresh_token: 'r',
+      user: Object.assign({ id: 'u1', user_metadata: {} }, extra || {}) });
+
+    const forged = sb(freeStore({ hvi_plan: 'premium', hvi_session: sess() }));
+    r.check('the forged flag reads as premium first', run(forged, 'isPremium()') === true);
+    r.check('reconciling clears it', run(forged, 'reconcilePlan()') === true);
+    r.check('and premium is gone', run(forged, 'isPremium()') === false,
+      '(bypass survives a relaunch)');
+  }
+
+  r.section('a real subscriber is left alone');
+  {
+    const paid = sb(freeStore({ hvi_plan: 'premium', hvi_session: JSON.stringify({
+      access_token: 't', user: { id: 'u1', user_metadata: { plan: 'premium' } } }) }));
+    r.check('nothing to reconcile', run(paid, 'reconcilePlan()') === false);
+    r.check('still premium', run(paid, 'isPremium()') === true, '(cleared a paying customer)');
+  }
+
+  r.section('a founder is left alone');
+  {
+    const f = sb(freeStore({ hvi_plan: 'premium', hvi_founder: '1',
+      hvi_session: JSON.stringify({ access_token: 't',
+        user: { id: 'u1', user_metadata: { founder: true } } }) }));
+    r.check('not cleared', run(f, 'reconcilePlan()') === false);
+    r.check('still premium', run(f, 'isPremium()') === true, '(cleared free access)');
+  }
+
+  // The checkout return marks the flag before the Stripe webhook lands.
+  // Clearing it straight away would undo a purchase the user just made.
+  r.section('a purchase whose webhook has not landed is honoured');
+  {
+    const fresh = sb(freeStore({ hvi_plan: 'premium',
+      hvi_plan_since: String(Date.now() - 60000),
+      hvi_session: JSON.stringify({ access_token: 't', user: { id: 'u1', user_metadata: {} } }) }));
+    r.check('a minute old is kept', run(fresh, 'reconcilePlan()') === false,
+      '(a real purchase would be revoked)');
+
+    const stale = sb(freeStore({ hvi_plan: 'premium',
+      hvi_plan_since: String(Date.now() - 40 * 3600 * 1000),
+      hvi_session: JSON.stringify({ access_token: 't', user: { id: 'u1', user_metadata: {} } }) }));
+    r.check('but not two days later', run(stale, 'reconcilePlan()') === true);
+  }
+
+  r.section('a signed-out user is not touched');
+  {
+    const guest = sb(freeStore({ hvi_plan: 'premium' }));
+    r.check('nothing to check against', run(guest, 'reconcilePlan()') === false);
+    r.check('offline use keeps working', run(guest, 'isPremium()') === true,
+      '(guest locked out with no way to verify)');
+  }
+
   return r.finish();
 };

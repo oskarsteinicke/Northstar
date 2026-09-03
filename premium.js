@@ -92,6 +92,50 @@ function isPaidSubscriber() {
   return !!_metaPlan() || ['premium', 'pro', 'elite'].includes(localStorage.getItem('hvi_plan'));
 }
 
+// ── PLAN RECONCILIATION ─────────────────────────────────────────────────────
+// hvi_plan is a local cache, not a grant. It exists so the app works offline and
+// so a purchase feels instant while the Stripe webhook lands. Anyone can type it
+// into devtools, and no client-side check can prevent that — a pure client app
+// cannot enforce entitlements, and pretending otherwise is worse than saying so.
+//
+// What this does is stop the forged flag *persisting*. Once signed in and
+// online, the refreshed session carries the server's answer, and if that says
+// no plan the local cache is cleared. Bypassing becomes something you have to
+// redo every launch rather than set once.
+//
+// The exception is a purchase whose webhook has not arrived yet: the checkout
+// return marks the flag optimistically, so clearing it immediately would undo a
+// real purchase. Those are honoured for a day.
+const _PLAN_GRACE_MS = 24 * 60 * 60 * 1000;
+
+function _markPlanLocally(reason) {
+  try {
+    localStorage.setItem('hvi_plan', 'premium');
+    localStorage.setItem('hvi_plan_since', String(Date.now()));
+    localStorage.setItem('hvi_plan_reason', reason || 'unknown');
+  } catch {}
+}
+
+function reconcilePlan() {
+  try {
+    if (typeof getSession !== 'function') return false;
+    const session = getSession();
+    if (!session || !session.user) return false;            // guest: nothing to check
+    if (!localStorage.getItem('hvi_plan')) return false;    // nothing cached to clear
+    if (_metaPlan()) return false;                          // server agrees
+    if (isFounder()) return false;                          // granted, just not via plan
+
+    const since = parseInt(localStorage.getItem('hvi_plan_since') || '0', 10);
+    if (since && (Date.now() - since) < _PLAN_GRACE_MS) return false;   // webhook may still land
+
+    localStorage.removeItem('hvi_plan');
+    localStorage.removeItem('hvi_plan_since');
+    localStorage.removeItem('hvi_plan_reason');
+    if (typeof track === 'function') track('plan_reconciled', {});
+    return true;
+  } catch { return false; }
+}
+
 // ── GATE HELPERS ──────────────────────────────────────────────────────────
 // Returns true if allowed; otherwise opens the paywall and returns false.
 function requirePremium(feature) {
@@ -249,7 +293,7 @@ function restorePurchase() {
   const plan = session.user?.user_metadata?.plan;
   const cust = session.user?.user_metadata?.stripe_customer;
   if (plan === 'premium' || plan === 'pro' || plan === 'elite') {
-    localStorage.setItem('hvi_plan', 'premium');
+    _markPlanLocally('restore');
     if (cust) localStorage.setItem('hvi_stripe_customer', cust);
     closeUpgradeModal();
     alert('Your Premium plan has been restored.');
@@ -270,11 +314,12 @@ function restorePurchase() {
       const session = typeof getSession === 'function' ? getSession() : null;
       const meta = session?.user?.user_metadata;
       if (meta?.plan && meta.plan !== 'free') {
-        localStorage.setItem('hvi_plan', 'premium');
+        _markPlanLocally('checkout');
         if (meta.stripe_customer) localStorage.setItem('hvi_stripe_customer', meta.stripe_customer);
       } else {
-        // Webhook may lag — optimistically mark locally; cloud will confirm
-        localStorage.setItem('hvi_plan', 'premium');
+        // Webhook may lag — mark locally and let reconcilePlan() confirm or
+        // clear it once the grace window is up.
+        _markPlanLocally('checkout-pending');
       }
     } catch {}
     _showUpgradeSuccess();

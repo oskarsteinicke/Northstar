@@ -2451,9 +2451,16 @@ function applyTheme() {
 // PROGRESS PHOTOS
 // ══════════════════════════════════════════════════════════════════════════
 
+let _photosRequested = false;
 function getProgressPhotos() { return LS.get('hvi_progress_photos', []); }
 
 function renderProgressPhotos() {
+  // Photos are not in the launch sync payload any more, so fetch them the first
+  // time someone actually looks. Re-renders once they arrive.
+  if (typeof pullPhotos === 'function' && !_photosRequested) {
+    _photosRequested = true;
+    pullPhotos().then(ok => { if (ok && curView === 'progressPhotos') renderProgressPhotos(); });
+  }
   const photos = getProgressPhotos();
   document.getElementById('view').innerHTML = `
     <button class="back" onclick="go('stats')"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg> Back</button>
@@ -2499,6 +2506,7 @@ function handleProgressPhoto(input) {
       // Keep max 30 photos to avoid localStorage overflow
       if (photos.length > 30) photos.pop();
       LS.set('hvi_progress_photos', photos);
+      if (typeof pushPhotos === 'function') pushPhotos();
       renderProgressPhotos();
     };
     img.src = e.target.result;
@@ -2527,6 +2535,7 @@ function deleteProgressPhoto(i) {
   const photos = getProgressPhotos();
   photos.splice(i, 1);
   LS.set('hvi_progress_photos', photos);
+  if (typeof pushPhotos === 'function') pushPhotos();
   document.getElementById('photo-view-modal').style.display = 'none';
   renderProgressPhotos();
 }

@@ -120,7 +120,7 @@ function _convertStoredWeights(f) {
 // ── SUPABASE AUTH + CLOUD SYNC ────────────────────────────────────────────
 const SUPABASE_URL = 'https://socflncohsenjptgkkax.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_J2qJ8iTfCESrML5Hm6NGbQ_mz9uPeug';
-const SYNC_KEYS = ['hvi_habits','hvi_log','hvi_journal3','hvi_meta','hvi_workout_log','hvi_workout_meta','hvi_meal_log','hvi_diet_meta','hvi_weight_log','hvi_prs','hvi_gamification','hvi_achievements','hvi_tdee_profile','hvi_custom_programs','hvi_onboarded','hvi_sleep_log','hvi_settings','hvi_habit_history','hvi_meal_favorites','hvi_progress_photos','hvi_routines','hvi_routine_log','hvi_integrations','hvi_challenges','hvi_habit_links','hvi_why','hvi_goals'];
+const SYNC_KEYS = ['hvi_habits','hvi_log','hvi_journal3','hvi_meta','hvi_workout_log','hvi_workout_meta','hvi_meal_log','hvi_diet_meta','hvi_weight_log','hvi_prs','hvi_gamification','hvi_achievements','hvi_tdee_profile','hvi_custom_programs','hvi_onboarded','hvi_sleep_log','hvi_settings','hvi_habit_history','hvi_meal_favorites','hvi_routines','hvi_routine_log','hvi_integrations','hvi_challenges','hvi_habit_links','hvi_why','hvi_goals'];
 // Keys that are date-keyed objects — these get merged instead of overwritten
 const MERGE_KEYS = ['hvi_workout_log','hvi_meal_log','hvi_journal3','hvi_weight_log','hvi_sleep_log','hvi_habit_history'];
 
@@ -240,7 +240,8 @@ async function claimFounderAccess() {
     if (!d || d.ok !== true) return null;
     localStorage.setItem('hvi_founder_checked', uid);
     if (d.founder) {
-      localStorage.setItem('hvi_plan', 'premium');
+      if (typeof _markPlanLocally === 'function') _markPlanLocally('founder');
+      else localStorage.setItem('hvi_plan', 'premium');
       localStorage.setItem('hvi_founder', '1');
       // The grant was written to user_metadata, but this device is still
       // holding the session from before it. Refreshing pulls it in, so the
@@ -364,6 +365,7 @@ async function cloudPush() {
       const rows = await pullRes.json();
       if (rows.length) {
         const cloud = rows[0].data || {};
+        _rescueLegacyPhotos(cloud);
         // Merge date-keyed objects (workouts, meals, journal, etc.)
         MERGE_KEYS.forEach(k => {
           if (cloud[k]) {
@@ -448,6 +450,73 @@ async function cloudPush() {
   } catch(e) { console.warn('[sync] push error:', e); setSyncStatus('offline'); _scheduleRetry(); }
 }
 
+// ── PROGRESS PHOTOS ───────────────────────────────────────────
+// Photos live in their own column rather than the main sync document. They are
+// by far the largest thing the app stores — up to 30 base64 JPEGs — and they
+// change perhaps weekly, while sync runs on every launch and every visibility
+// change. Carried inside `data` they were downloaded and re-uploaded every
+// time, for nothing.
+//
+// So: pulled only when something wants to look at them, pushed only when they
+// change, and never on the launch path.
+const PHOTO_KEY = 'hvi_progress_photos';
+let _photosPulled = false;
+
+async function pushPhotos() {
+  const uid = getCurrentUserId();
+  if (!uid || !navigator.onLine) return false;
+  let photos;
+  try { photos = JSON.parse(localStorage.getItem(PHOTO_KEY) || '[]'); } catch { return false; }
+  try {
+    await _ensureFreshToken();
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/hvi_data`, {
+      method: 'POST',
+      headers: authHeaders({ 'Prefer': 'resolution=merge-duplicates' }),
+      body: JSON.stringify({ user_id: uid, photos, updated_at: new Date().toISOString() }),
+    });
+    return res.ok;
+  } catch { return false; }
+}
+
+async function pullPhotos(force) {
+  const uid = getCurrentUserId();
+  if (!uid || !navigator.onLine) return false;
+  if (_photosPulled && !force) return true;      // once per session is plenty
+  try {
+    await _ensureFreshToken();
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/hvi_data?user_id=eq.${uid}&select=photos`,
+      { headers: authHeaders() });
+    if (!res.ok) return false;
+    const rows = await res.json();
+    const cloud = rows.length ? rows[0].photos : null;
+    _photosPulled = true;
+    if (!Array.isArray(cloud) || !cloud.length) return true;
+    let local = [];
+    try { local = JSON.parse(localStorage.getItem(PHOTO_KEY) || '[]'); } catch {}
+    // Same shape as the rest of sync: union by date, newest first, capped.
+    const byDate = {};
+    cloud.concat(local).forEach(p => { if (p && p.date) byDate[p.date] = p; });
+    const merged = Object.values(byDate).sort((a, b) => (a.date < b.date ? 1 : -1)).slice(0, 30);
+    LS.set(PHOTO_KEY, merged);
+    return true;
+  } catch { return false; }
+}
+
+// Photos synced before they had their own column are still inside the main
+// document. Lift them out on the first pull that sees them; the next push
+// writes `data` without the key, so the old copy disappears on its own.
+function _rescueLegacyPhotos(cloud) {
+  try {
+    const legacy = cloud && cloud[PHOTO_KEY];
+    if (!Array.isArray(legacy) || !legacy.length) return;
+    let local = [];
+    try { local = JSON.parse(localStorage.getItem(PHOTO_KEY) || '[]'); } catch {}
+    if (local.length >= legacy.length) return;
+    LS.set(PHOTO_KEY, legacy);
+    pushPhotos();
+  } catch {}
+}
+
 let _retryTimer = null, _retryDelay = 5000;
 function _scheduleRetry() {
   if (_retryTimer) return;
@@ -492,6 +561,7 @@ async function cloudPull() {
     console.log('[sync] pull got', rows.length, 'rows');
     if (!rows.length) { _syncToast('☁️ No cloud data yet'); return false; }
     const cloud = rows[0].data || {};
+    _rescueLegacyPhotos(cloud);
     console.log('[sync] cloud keys:', Object.keys(cloud).join(', '));
     _syncToast('✓ Pulled ' + Object.keys(cloud).length + ' keys from cloud');
     SYNC_KEYS.forEach(k => {
@@ -1408,6 +1478,9 @@ async function init() {
     // After the pull, so a founder grant is not overwritten by older cloud
     // state, and not awaited, so a slow or down Worker cannot delay launch.
     claimFounderAccess();
+    // The session was just refreshed by the pull, so its metadata is the
+    // server's answer. Drop a local premium flag the server does not back.
+    if (typeof reconcilePlan === 'function') reconcilePlan();
   } else {
     try { if (!localStorage.getItem('hvi_guest')) localStorage.setItem('hvi_guest', '1'); } catch {}
   }
