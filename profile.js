@@ -1439,6 +1439,14 @@ function renderStats() {
         </div>
       </div>
       <div style="font-size:11px;color:var(--text-muted);margin-bottom:14px">Once on the first open of each day, unless it's already logged.</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div style="font-size:14px;color:var(--text)">Milestone prompts</div>
+        <div class="unit-toggle">
+          <button class="unit-btn${settings.milestonePrompts!==false?' unit-btn-active':''}" onclick="settings.milestonePrompts=true;LS.set('hvi_settings',settings);renderStats()">On</button>
+          <button class="unit-btn${settings.milestonePrompts===false?' unit-btn-active':''}" onclick="settings.milestonePrompts=false;LS.set('hvi_settings',settings);renderStats()">Off</button>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:14px">Offers to share a streak milestone. Each one is offered once, ever.</div>
       ${(() => {
         const native = typeof _nativeNotifier === 'function' && !!_nativeNotifier();
         const push = typeof pushSupported === 'function' && pushSupported();

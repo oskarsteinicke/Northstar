@@ -1655,6 +1655,122 @@ async function init() {
   _handlePendingJoin();
 }
 
+// ── MILESTONE & INVITE PROMPTS ────────────────────────────────
+// Every share and invite mechanic in the app was a button someone had to go
+// find, so none of them ever fired. These surface the same machinery at the
+// only moments it is actually worth offering: when something happened worth
+// showing, and when a leaderboard has nobody in it.
+//
+// Each prompt fires once, ever. There is no repeat and no nagging: a milestone
+// that has been offered is recorded and never offered again, so the ceiling on
+// how often this can interrupt anyone is fixed by the list itself.
+const STREAK_MILESTONES = [7, 30, 100, 365];
+
+function _seenMilestones() {
+  try { return JSON.parse(localStorage.getItem('hvi_milestones_seen') || '[]'); } catch { return []; }
+}
+function _markMilestoneSeen(key) {
+  const seen = _seenMilestones();
+  if (seen.includes(key)) return;
+  seen.push(key);
+  try { localStorage.setItem('hvi_milestones_seen', JSON.stringify(seen.slice(-40))); } catch {}
+}
+
+// Nothing may stack on top of another overlay, and a prompt that cannot be
+// shown must not be marked as offered — it should simply wait for next time.
+function _promptSlotFree() {
+  return !document.getElementById('sleep-prompt')
+      && !document.getElementById('weekly-recap-modal')
+      && !document.getElementById('premium-modal')
+      && !document.getElementById('ob-overlay')
+      && !document.getElementById('milestone-prompt');
+}
+
+function bestStreak() {
+  return Math.max(0, ...(habits || []).map(h => (log[h.id] || {}).streak || 0));
+}
+
+// Called after a habit is completed. Offers at most one prompt.
+function checkMilestones() {
+  try {
+    if (!LS.get('hvi_onboarded', false)) return;
+    if (settings && settings.milestonePrompts === false) return;
+    if (!_promptSlotFree()) return;
+
+    const best = bestStreak();
+    const hit = STREAK_MILESTONES.filter(m => best >= m).pop();
+    if (hit) {
+      const key = 'streak' + hit;
+      if (!_seenMilestones().includes(key)) {
+        _markMilestoneSeen(key);
+        showMilestonePrompt({
+          eyebrow: 'Milestone',
+          title: `${hit} days`,
+          body: `You have kept a habit alive for ${hit} straight days. That is the hard part, and most people never get here.`,
+          action: 'Share it',
+          onAction: 'shareDailyCard',
+        });
+        return;
+      }
+    }
+
+    // Nothing to celebrate; see whether the leaderboard is worth mentioning.
+    checkInvitePrompt();
+  } catch (e) { reportError('milestone_prompt', e && e.message); }
+}
+
+// A leaderboard with nobody else in it does nothing for anyone. Offer once, and
+// only after enough of a streak that there is something worth comparing.
+function checkInvitePrompt() {
+  try {
+    if (_seenMilestones().includes('invite')) return;
+    if (bestStreak() < 3) return;
+    if (!getAccessToken()) return;                  // needs an account to have a group
+    // Written by the leaderboard screen when it loads. Absent means it has
+    // never been opened, which counts as alone — that is exactly the person
+    // worth telling.
+    let sum = {};
+    try { sum = JSON.parse(localStorage.getItem('hvi_lb_summary') || '{}'); } catch {}
+    const alone = !(sum.groups > 0) || !(sum.maxMembers > 1);
+    if (!alone) return;
+    _markMilestoneSeen('invite');
+    showMilestonePrompt({
+      eyebrow: 'Leaderboard',
+      title: 'Nobody to beat',
+      body: 'A leaderboard with one person on it is just a list. Bring in someone who will actually push you.',
+      action: 'Invite someone',
+      onAction: 'go',
+      arg: 'leaderboard',
+    });
+  } catch {}
+}
+
+function showMilestonePrompt(o) {
+  if (!_promptSlotFree()) return;
+  const modal = document.createElement('div');
+  modal.id = 'milestone-prompt';
+  const act = o.arg ? `${o.onAction}('${o.arg}')` : `${o.onAction}()`;
+  modal.innerHTML = `
+    <div style="position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:4000;display:flex;align-items:center;justify-content:center;padding:24px" onclick="dismissMilestonePrompt()">
+      <div style="background:var(--bg);border:1px solid var(--border2);border-radius:24px;padding:32px 24px;max-width:360px;width:100%;text-align:center" onclick="event.stopPropagation()">
+        <div style="font-size:11px;color:var(--accent);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">${o.eyebrow}</div>
+        <div style="font-family:var(--serif);font-size:32px;color:var(--text);margin-bottom:10px">${o.title}</div>
+        <div style="font-size:13px;color:var(--text-dim);line-height:1.5;margin-bottom:24px">${o.body}</div>
+        <div style="display:flex;gap:10px">
+          <button class="w-action-btn" style="flex:1;margin:0" onclick="dismissMilestonePrompt()">Not now</button>
+          <button class="w-action-btn" style="flex:1;margin:0;background:var(--accent);color:#fff" onclick="dismissMilestonePrompt();${act}">${o.action}</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  if (typeof track === 'function') track('milestone_prompt_shown', { kind: o.eyebrow });
+}
+
+function dismissMilestonePrompt() {
+  const m = document.getElementById('milestone-prompt');
+  if (m) m.remove();
+}
+
 // ── SLEEP ─────────────────────────────────────────────────────
 // Hours are derived from bedtime and wake time, never typed. Both were already
 // being stored and nothing ever read them, so entering the two times used to
@@ -2120,6 +2236,8 @@ function tapHabit(id, suffix) {
   // permanently empty — which quietly broke weekly schedules and left the
   // coach and calendar with nothing to read.
   setHabitHistory(id, t, e.completedToday);
+  // Offer a share or an invite only when the tap actually completed something.
+  if (e.completedToday) setTimeout(checkMilestones, 700);
   const habit = habits.find(h => h.id === id);
   const pillarId = habit ? PILLARS.find(p => p.cats.includes(habit.category))?.id : null;
   if (e.completedToday) {

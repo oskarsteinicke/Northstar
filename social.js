@@ -1144,7 +1144,31 @@ async function _lbFetchMyGroups() {
     headers: _lbHeaders(),
   });
   if (!gRes.ok) { console.warn('[lb] fetch groups failed:', gRes.status); return null; }
-  return gRes.json();
+  const groups = await gRes.json();
+  _lbNoteSummary(groups);
+  return groups;
+}
+
+// Groups are always fetched live, so nothing outside this screen can tell
+// whether a leaderboard has anyone on it. Leave a small note behind so the
+// invite prompt can ask without a network round trip of its own. Absent means
+// "never opened the leaderboard", which counts as alone — correctly, since that
+// is exactly the person worth inviting someone.
+function _lbNoteSummary(groups) {
+  try {
+    localStorage.setItem('hvi_lb_summary', JSON.stringify({
+      groups: (groups || []).length,
+      at: Date.now(),
+    }));
+  } catch {}
+}
+
+function _lbNoteMemberCount(n) {
+  try {
+    const cur = JSON.parse(localStorage.getItem('hvi_lb_summary') || '{}');
+    cur.maxMembers = Math.max(cur.maxMembers || 0, n || 0);
+    localStorage.setItem('hvi_lb_summary', JSON.stringify(cur));
+  } catch {}
 }
 
 async function _lbFetchGroupMembers(groupId) {
@@ -1153,7 +1177,9 @@ async function _lbFetchGroupMembers(groupId) {
     headers: _lbHeaders(),
   });
   if (!res.ok) { console.warn('[lb] fetch members failed:', res.status); return null; }
-  return res.json();
+  const members = await res.json();
+  _lbNoteMemberCount((members || []).length);
+  return members;
 }
 
 async function _lbPushMyStats(groupId) {
