@@ -1,5 +1,15 @@
 apply plugin: 'com.android.application'
 
+// Release signing. The keystore lives outside this repository on purpose: a
+// signing key in a public repo lets anyone publish an update as you. If the
+// properties file is absent — anyone else's clone, or CI — the release build
+// simply comes out unsigned rather than failing, so debug work is unaffected.
+def keystorePropsFile = file(System.getProperty("user.home") + "/devtools/arete-signing/keystore.properties")
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+
 android {
     namespace "com.getarete.app"
     compileSdk rootProject.ext.compileSdkVersion
@@ -16,8 +26,19 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (keystoreProps['storeFile']) {
+                storeFile file(keystoreProps['storeFile'])
+                storePassword keystoreProps['storePassword']
+                keyAlias keystoreProps['keyAlias']
+                keyPassword keystoreProps['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
+            if (keystoreProps['storeFile']) { signingConfig signingConfigs.release }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

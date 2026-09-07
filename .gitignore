@@ -1,3 +1,11 @@
 .DS_Store
 *.log
 node_modules/
+
+# Android signing. The keystore itself lives outside this repo entirely
+# (~/devtools/arete-signing), but these patterns are belt and braces: a signing
+# key committed to a public repo lets anyone publish an update as you.
+*.jks
+*.keystore
+keystore.properties
+local.properties
