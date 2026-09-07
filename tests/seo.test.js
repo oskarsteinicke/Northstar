@@ -102,6 +102,22 @@ module.exports = function () {
     }
   }
 
+  // Pages that are reachable but not meant to be found have to say so
+  // themselves. robots.txt Disallow would be the wrong tool: it blocks the
+  // crawl, so the directive is never read and the URL lingers in the index.
+  r.section('pages outside the sitemap refuse indexing');
+  {
+    const listed = new Set(locs.map(fileFor));
+    const PUBLIC_BY_DESIGN = new Set(['privacy.html', 'index.html']);
+    const pages = fs.readdirSync(APP).filter(f => f.endsWith('.html'));
+    for (const f of pages) {
+      if (listed.has(f) || PUBLIC_BY_DESIGN.has(f)) continue;
+      const m = read(f).match(/<meta name="robots" content="([^"]*)"/);
+      r.check(`${f} is noindex`, !!m && /noindex/.test(m[1]),
+        '(reachable and indexable but not a page you meant to rank)');
+    }
+  }
+
   r.section('robots does not block the site');
   {
     const robots = read('robots.txt');
