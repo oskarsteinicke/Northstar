@@ -27,7 +27,10 @@ function sb(reply, store) {
       });
     },
   });
+  // Free access only means something against a paywall, so switch it on here
+  // regardless of the shipped default. premium.test.js covers the off state.
   run(s, `settings={}; curView='home'; track=function(){}; go=function(){};
+          PAYWALL_ENABLED = true;
           habits=[]; setSyncStatus=function(){};`);
   s._calls = calls;
   return s;

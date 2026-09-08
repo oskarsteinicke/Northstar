@@ -289,6 +289,21 @@ module.exports = async function () {
     r.check('410 needs no corroboration', !('push:g' in store._d));
   }
 
+  // The client switch is forgeable; this is the one that actually prevents a
+  // charge, because with it off no Stripe session exists to pay for.
+  r.section('the Worker refuses checkout unless explicitly enabled');
+  {
+    const { sb } = loadWorker(accepted);
+    const enabled = vm.runInContext('paywallEnabled', sb);
+    r.check('absent means no', enabled({}) === false, '(fails open into charging people)');
+    r.check('empty means no', enabled({ PAYWALL_ENABLED: '' }) === false);
+    r.check('"false" means no', enabled({ PAYWALL_ENABLED: 'false' }) === false);
+    r.check('anything else means no', enabled({ PAYWALL_ENABLED: '1' }) === false,
+      '(a stray value switches charging back on)');
+    r.check('only an explicit true enables it', enabled({ PAYWALL_ENABLED: 'true' }) === true);
+    r.check('and it is case-insensitive', enabled({ PAYWALL_ENABLED: 'TRUE' }) === true);
+  }
+
   r.section('subscribe and unsubscribe');
   {
     const store = kv({});

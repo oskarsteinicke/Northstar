@@ -67,11 +67,30 @@ function _metaPlan() {
 // users into a checkout that violates that policy, the native build ships with
 // everything unlocked. This is the gate for the whole paywall: with it true,
 // none of the upgrade prompts below can be reached.
+// Master switch for charging anyone, anywhere.
+//
+// Off while the question of whether Arete may take money at all is unresolved.
+// Stripe is fully configured and armed on the Worker, so with this on, a
+// stranger signing up and subscribing would deposit real money without anyone
+// deciding that should happen. Off makes that impossible rather than unlikely.
+//
+// To re-enable, both halves have to move: flip this to true AND set
+// PAYWALL_ENABLED=true on the Worker. The Worker refuses to create a Stripe
+// checkout session without it, so flipping this alone changes nothing — which
+// is the point, since a client-side flag is forgeable and a server-side one is
+// not.
+// `let`, not `const`: the paywall logic must stay exercised while it is off, or
+// it rots and breaks silently the day it is switched back on. The tests flip
+// this. Const-ness would buy nothing anyway — the real guard is the Worker,
+// which will not create a Stripe session regardless of what the client says.
+let PAYWALL_ENABLED = false;
+
 function isNativeBuild() {
   try { return !!(typeof window !== 'undefined' && window.Capacitor); } catch { return false; }
 }
 
 function getUserPlan() {
+  if (!PAYWALL_ENABLED) return 'premium';                              // nobody is charged
   if (isNativeBuild()) return 'premium';                               // see isNativeBuild
   if (_metaPlan()) return 'premium';                                   // server of truth
   const local = localStorage.getItem('hvi_plan');
@@ -214,7 +233,7 @@ function setBilling(b) {
 }
 
 function showUpgradeModal(context) {
-  if (isNativeBuild()) return;      // no Stripe checkout in a Play Store build
+  if (!PAYWALL_ENABLED || isNativeBuild()) return;   // nothing to sell right now
   return _showUpgradeModal(context);
 }
 
@@ -252,6 +271,9 @@ function closeUpgradeModal() {
 
 // ── CHECKOUT ────────────────────────────────────────────────────────────────
 async function startCheckout() {
+  // The last client-side gate before Stripe. The Worker refuses too, but no
+  // reachable path should even try.
+  if (!PAYWALL_ENABLED) return;
   if (typeof track === 'function') track('checkout_start', { billing: _selectedBilling });
   const session = typeof getSession === 'function' ? getSession() : null;
   if (!session?.user) {
@@ -359,10 +381,10 @@ function _showUpgradeSuccess() {
 
 // ── PROFILE SETTINGS CARD ───────────────────────────────────────────────────
 function renderPremiumSettingsCard() {
-  if (isNativeBuild()) {
+  if (!PAYWALL_ENABLED || isNativeBuild()) {
     return `<div class="pw-status pw-status-founder">
       <div class="pw-status-row"><span class="pw-status-badge">\u2b50 Premium</span><span class="pw-status-plan">Included</span></div>
-      <div class="pw-status-note">Every feature is unlocked in the app. Nothing to subscribe to.</div>
+      <div class="pw-status-note">Every feature is unlocked. Nothing to subscribe to.</div>
     </div>`;
   }
   // Early accounts — server-granted, permanent, never billed

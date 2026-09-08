@@ -4,9 +4,13 @@ const { createSandbox, run, createReporter } = require('./harness');
 const FILES = ['data.js','app.js','premium.js'];
 const DAY = 86400000;
 
+// Almost everything here is about how the paywall behaves, so these sandboxes
+// switch it on regardless of what is shipped. The section at the bottom turns
+// it off explicitly and checks the shipped state.
 function sb(store) {
   const s = createSandbox({ files: FILES, store });
   run(s, `settings={}; curView='home'; track=function(){}; go=function(){};
+          PAYWALL_ENABLED = true;
           habits=JSON.parse(localStorage.getItem('hvi_habits')||'[]');`);
   return s;
 }
@@ -150,6 +154,7 @@ module.exports = function () {
     const native = createSandbox({ files: FILES, store: freeStore({ hvi_habits: '[]' }),
                                    capacitor: { platform: 'android' } });
     run(native, `settings={}; curView='home'; track=function(){}; go=function(){};
+                 PAYWALL_ENABLED = true;
                  habits=JSON.parse(localStorage.getItem('hvi_habits')||'[]');`);
     r.check('detected as native', run(native, 'isNativeBuild()') === true);
     r.check('everything unlocked', run(native, 'isPremium()') === true,
@@ -178,6 +183,35 @@ module.exports = function () {
     r.check('still free tier', run(web, 'isPremium()') === false,
       '(paywall removed from the web build too)');
     r.check('limit still applies', run(web, 'canAddHabit()') === false);
+  }
+
+  // Stripe is fully configured and armed. With the paywall on, a stranger
+  // subscribing deposits real money without anyone deciding that should happen.
+  r.section('with the paywall off, nobody is charged anywhere');
+  {
+    const web = sb(freeStore({ hvi_habits: JSON.stringify(
+      Array.from({ length: 40 }, (_, i) => ({ id: 'h' + i }))) }));
+    // sb() turns it on; read the shipped default from a clean load instead.
+    const shipped = createSandbox({ files: FILES, store: freeStore({}) });
+    run(shipped, `settings={}; curView='home'; track=function(){}; go=function(){}; habits=[];`);
+    r.check('the shipped default is off', run(shipped, 'PAYWALL_ENABLED') === false,
+      '(charging is live)');
+    run(web, 'PAYWALL_ENABLED = false;');
+    r.check('everything unlocked on web too', run(web, 'isPremium()') === true);
+    r.check('no habit limit', run(web, 'canAddHabit()') === true);
+
+    const card = run(web, 'renderPremiumSettingsCard()');
+    r.check('nothing is offered for sale', !/Go Premium/.test(card), '(upsell with no way to pay)');
+
+    run(web, `_opened=false; _showUpgradeModal=function(){ _opened=true; };
+              showUpgradeModal('workout');`);
+    r.check('the upgrade modal cannot open', run(web, '_opened') === false);
+
+    // startCheckout is the only client path that reaches Stripe.
+    run(web, `_reached=false; getSession=function(){ _reached=true; return null; };`);
+    run(web, 'startCheckout()');
+    r.check('checkout returns before touching anything',
+      run(web, '_reached') === false, '(a path to Stripe is still live)');
   }
 
   return r.finish();

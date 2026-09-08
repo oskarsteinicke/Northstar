@@ -185,6 +185,16 @@ async function handleHealth(request, env, origin) {
 const STRIPE_API = 'https://api.stripe.com/v1';
 const SUPABASE_URL = 'https://socflncohsenjptgkkax.supabase.co';
 
+// Whether Arete may charge anyone. Fail-closed: absent or anything other than
+// "true" means no. The client has its own switch, but a client-side flag is
+// forgeable — this is the one that actually prevents a charge, because without
+// it no Stripe session is ever created and there is nothing to pay.
+//
+// Set with: npx wrangler secret put PAYWALL_ENABLED   (value: true)
+function paywallEnabled(env) {
+  return String(env.PAYWALL_ENABLED || '').toLowerCase() === 'true';
+}
+
 async function stripeRequest(path, params, env) {
   const res = await fetch(`${STRIPE_API}${path}`, {
     method: 'POST',
@@ -788,10 +798,15 @@ export default {
 
       // Stripe checkout session
       if (path === '/stripe/checkout') {
+        if (!paywallEnabled(env)) {
+          return jsonResponse({ error: 'Subscriptions are not available.' }, 503, origin);
+        }
         return handleCheckout(await request.json(), env, origin);
       }
 
-      // Stripe customer portal
+      // Stripe customer portal. Left open when the paywall is off: anyone who
+      // already subscribed must still be able to reach their billing and
+      // cancel. Disabling this would trap an existing subscriber.
       if (path === '/stripe/portal') {
         return handlePortal(await request.json(), env, origin);
       }
