@@ -932,6 +932,7 @@ function ring(r, pct, sw = 3, color = 'var(--accent)') {
 // rest of the UI agree. inherits color via stroke="currentColor".
 const _ICONS = {
   activity: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+  droplet: '<path d="M12 2.7 6.7 8a7.5 7.5 0 1 0 10.6 0z"/>',
   target: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
   check: '<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
   moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
@@ -1020,9 +1021,54 @@ function toggleQuickLog() {
     <div class="quick-log-item" onclick="closeQuickLog();go('dietAddMeal')">${icon('utensils')} Log Meal</div>
     <div class="quick-log-item" onclick="closeQuickLog();go('workoutActive')">${icon('activity')} Start Workout</div>
     <div class="quick-log-item" onclick="closeQuickLog();go('library')">${icon('edit')} Journal</div>
-    <div class="quick-log-item" onclick="closeQuickLog();go('sleep')">${icon('moon')} Log Sleep</div>`;
+    <div class="quick-log-item" onclick="closeQuickLog();go('sleep')">${icon('moon')} Log Sleep</div>
+    <div class="quick-log-item" onclick="closeQuickLog();quickLogWater()">${icon('droplet')} ${_quickWaterLabel()}</div>`;
   document.body.appendChild(menu);
 }
+// Brief confirmation for actions taken somewhere the result is not visible —
+// logging water from the quick menu happens on whatever screen you are already
+// on, so without this there is nothing to say it worked.
+let _toastTimer = null;
+function showToast(msg) {
+  try {
+    let el = document.getElementById('toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'toast';
+      el.className = 'toast';
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    // Restart the animation even if a toast is already on screen.
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => el.classList.remove('show'), 1700);
+  } catch {}
+}
+
+// Shows progress before you tap, so the menu is useful even when you only
+// wanted to check. diet.js owns the water functions and loads eagerly, but this
+// is reachable from every screen, so guard rather than assume.
+function _quickWaterLabel() {
+  if (typeof getWaterMl !== 'function') return 'Log Water';
+  const per = typeof waterUnitMl === 'function' ? waterUnitMl() : 250;
+  const n = Math.round(getWaterMl() / per);
+  const goalN = Math.max(1, Math.ceil(waterGoalMl() / per));
+  return `Water \u00b7 ${n} of ${goalN}`;
+}
+
+function quickLogWater() {
+  if (typeof addWater !== 'function') return;
+  addWater(1);
+  const per = waterUnitMl();
+  const n = Math.round(getWaterMl() / per);
+  const goalN = Math.max(1, Math.ceil(waterGoalMl() / per));
+  const word = isImperial() ? 'cups' : 'glasses';
+  showToast(n >= goalN ? `Water goal hit \u00b7 ${n} ${word}` : `${n} of ${goalN} ${word}`);
+}
+
 function closeQuickLog() {
   _fabOpen = false;
   document.getElementById('quick-log-menu')?.remove();

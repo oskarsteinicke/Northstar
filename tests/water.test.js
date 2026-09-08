@@ -138,5 +138,38 @@ module.exports = function () {
       '(one device wipes another day of logging)');
   }
 
+  // The quick log closes itself and can be opened from any screen, so unlike
+  // every other entry in it this one does the thing rather than navigating to
+  // it — and therefore needs to say that it happened.
+  r.section('logging water from the quick menu');
+  {
+    const s2 = sb();
+    run(s2, `_toasts=[]; showToast=function(m){ _toasts.push(m); };`);
+    r.check('the menu shows progress before you tap',
+      /Water · 0 of 12/.test(run(s2, '_quickWaterLabel()')), `(${run(s2, '_quickWaterLabel()')})`);
+
+    run(s2, 'quickLogWater()');
+    r.check('a glass is added', water(s2) === 250);
+    r.check('and it says so', run(s2, '_toasts[0]') === '1 of 12 glasses',
+      `(${run(s2, '_toasts[0]')})`);
+    r.check('the label updates', /Water · 1 of 12/.test(run(s2, '_quickWaterLabel()')));
+
+    run(s2, 'for (let i=0;i<11;i++) quickLogWater();');   // 12 total
+    r.check('hitting the goal is called out',
+      /goal hit/.test(run(s2, '_toasts[_toasts.length-1]')),
+      `(${run(s2, '_toasts[_toasts.length-1]')})`);
+  }
+
+  r.section('the quick menu survives diet.js not being loaded');
+  {
+    // app.js loads before diet.js, and the menu is reachable from every screen.
+    const bare = createSandbox({ files: ['data.js', 'app.js'] });
+    run(bare, `settings={}; curView='home'; track=function(){}; go=function(){}; habits=[];`);
+    r.check('it falls back to a plain label',
+      run(bare, '_quickWaterLabel()') === 'Log Water', `(${run(bare, '_quickWaterLabel()')})`);
+    run(bare, 'quickLogWater()');
+    r.check('and tapping it does not throw', true);
+  }
+
   return r.finish();
 };
