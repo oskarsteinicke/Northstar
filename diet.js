@@ -506,6 +506,77 @@ function _buildCalorieTrendChart() {
   </div>`;
 }
 
+// ── WATER ─────────────────────────────────────────────────────
+// Deliberately small: one row under the macro rings, two taps, no screen of its
+// own and no reminders. Water tracking that demands attention gets switched off.
+//
+// Always stored in millilitres regardless of the display unit. The weight log
+// learned this the hard way — storing whatever was on screen meant a unit switch
+// silently changed the value rather than converting it.
+const ML_PER_GLASS = 250;          // a glass, metric
+const ML_PER_CUP = 237;            // 8 US fl oz
+const WATER_ML_PER_KG = 35;        // common daily intake heuristic
+
+function waterUnitMl() { return isImperial() ? ML_PER_CUP : ML_PER_GLASS; }
+
+function waterGoalMl() {
+  const p = (typeof tdeeProfile !== 'undefined' && tdeeProfile) || null;
+  const kg = p && p.weight_kg > 0 ? p.weight_kg : null;
+  if (!kg) return 2500;                                  // sane default, no profile
+  return Math.round((kg * WATER_ML_PER_KG) / 50) * 50;   // nearest 50ml
+}
+
+function getWaterMl(key) {
+  const log = LS.get('hvi_water_log', {}) || {};
+  return log[key || today()] || 0;
+}
+
+function addWater(units) {
+  const t = today();
+  const log = LS.get('hvi_water_log', {}) || {};
+  const next = Math.max(0, (log[t] || 0) + units * waterUnitMl());
+  if (next === 0) delete log[t]; else log[t] = next;
+  LS.set('hvi_water_log', log);
+  if (typeof track === 'function' && units > 0) track('water_logged', {});
+  if (curView === 'diet') renderDiet();
+}
+
+// "6 of 10 glasses" reads better than millilitres, but the litre total is what
+// people actually check, so show both without making a second row of it.
+function waterLabel(ml, goalMl) {
+  const per = waterUnitMl();
+  const n = Math.round(ml / per);
+  // Ceiling, not rounding. A 2800ml goal rounds to 11 glasses, but 11 glasses is
+  // 2750ml, so the row would show every glass filled and still not read as done.
+  const goalN = Math.max(1, Math.ceil(goalMl / per));
+  const big = isImperial()
+    ? `${(ml / 29.5735).toFixed(0)} oz`
+    : `${(ml / 1000).toFixed(1)} L`;
+  // Both forms explicitly: slicing an "s" off "glasses" gives "glasse", which
+  // is what a screen reader would have read out on the buttons.
+  return { n, goalN, big, word: isImperial() ? 'cups' : 'glasses',
+           one: isImperial() ? 'cup' : 'glass' };
+}
+
+function waterRowHTML() {
+  const ml = getWaterMl();
+  const goalMl = waterGoalMl();
+  const { n, goalN, big, word, one } = waterLabel(ml, goalMl);
+  const pct = Math.min(100, goalMl ? (ml / goalMl) * 100 : 0);
+  const done = ml >= goalMl;
+  return `<div class="d-water ani">
+    <button class="d-water-btn" onclick="addWater(-1)" aria-label="Remove one ${one}"${ml <= 0 ? ' disabled' : ''}>\u2212</button>
+    <div class="d-water-mid">
+      <div class="d-water-top">
+        <span class="d-water-label">Water</span>
+        <span class="d-water-count">${n} / ${goalN} ${word} \u00b7 ${big}</span>
+      </div>
+      <div class="d-water-track"><div class="d-water-fill${done ? ' done' : ''}" style="width:${pct}%"></div></div>
+    </div>
+    <button class="d-water-btn" onclick="addWater(1)" aria-label="Add one ${one}">+</button>
+  </div>`;
+}
+
 function renderDiet() {
   mealLog = LS.get('hvi_meal_log', {});
   weightLog = LS.get('hvi_weight_log', {});
@@ -581,6 +652,7 @@ function renderDiet() {
   document.getElementById('view').innerHTML = `
     <div class="page-head ani"><div class="page-title">Nutrition</div><div class="page-sub">Fuel your body with intention.</div></div>
     <div class="d-rings ani">${rings}</div>
+    ${waterRowHTML()}
     ${typeof macroAdjustBadgeHTML === 'function' ? macroAdjustBadgeHTML() : ''}
     ${_buildCalorieTrendChart()}
     ${expenditureHTML}

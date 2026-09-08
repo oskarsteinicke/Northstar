@@ -3043,3 +3043,42 @@ body {
 .w-advice-text { flex: 1; min-width: 0; }
 .w-advice-head { font-size: 13.5px; font-weight: 600; color: var(--text); }
 .w-advice-detail { font-size: 11.5px; color: var(--text-dim); line-height: 1.45; margin-top: 2px; }
+
+
+/* ── Water row ──────────────────────────────────────────────────────────────
+   One line under the macro rings. Sized to sit quietly next to them rather
+   than compete: no card, no heading, just a track and two small buttons. */
+.d-water {
+  display: flex; align-items: center; gap: 12px;
+  margin: 0 24px 18px; padding: 10px 12px;
+  background: var(--surface); border: 1px solid var(--border2); border-radius: 14px;
+}
+.d-water-mid { flex: 1; min-width: 0; }
+.d-water-top {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 8px; margin-bottom: 6px;
+}
+.d-water-label {
+  font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.d-water-count {
+  font-size: 11px; color: var(--text-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.d-water-track {
+  height: 4px; border-radius: 2px; background: rgba(255,255,255,0.07); overflow: hidden;
+}
+.d-water-fill {
+  height: 100%; border-radius: 2px; background: #4a9fd8;
+  transition: width .25s ease;
+}
+.d-water-fill.done { background: var(--accent-b); }
+.d-water-btn {
+  width: 32px; height: 32px; flex: 0 0 32px;
+  border-radius: 50%; border: 1px solid var(--border2);
+  background: transparent; color: var(--text-dim);
+  font-size: 17px; line-height: 1; cursor: pointer;
+}
+.d-water-btn:active { background: rgba(255,255,255,0.06); }
+.d-water-btn:disabled { opacity: .3; cursor: default; }
