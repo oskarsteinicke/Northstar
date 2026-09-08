@@ -142,5 +142,43 @@ module.exports = function () {
       '(guest locked out with no way to verify)');
   }
 
+  // Google Play requires Play Billing for digital purchases. Arete charges via
+  // Stripe, so the Android build must never route anyone into that checkout.
+  // Getting this wrong is not a bug report, it is app removal.
+  r.section('the native build has no paywall at all');
+  {
+    const native = createSandbox({ files: FILES, store: freeStore({ hvi_habits: '[]' }),
+                                   capacitor: { platform: 'android' } });
+    run(native, `settings={}; curView='home'; track=function(){}; go=function(){};
+                 habits=JSON.parse(localStorage.getItem('hvi_habits')||'[]');`);
+    r.check('detected as native', run(native, 'isNativeBuild()') === true);
+    r.check('everything unlocked', run(native, 'isPremium()') === true,
+      '(Android users hit a Stripe paywall)');
+
+    const many = Array.from({ length: 40 }, (_, i) => ({ id: 'h' + i }));
+    run(native, `habits = ${JSON.stringify(many)};`);
+    r.check('no habit limit', run(native, 'canAddHabit()') === true);
+
+    const card = run(native, 'renderPremiumSettingsCard()');
+    r.check('no upsell in settings', !/Go Premium/.test(card), '(offers a purchase Play forbids)');
+    r.check('no billing portal either', !/Manage subscription/.test(card));
+
+    // Even a call site that forgets to check isPremium() first must not open it.
+    run(native, `_upgradeShown=false; _showUpgradeModal=function(){ _upgradeShown=true; };
+                 showUpgradeModal('workout');`);
+    r.check('the upgrade modal cannot be opened', run(native, '_upgradeShown') === false,
+      '(Stripe checkout reachable inside a Play build)');
+  }
+
+  r.section('the web build still has its paywall');
+  {
+    const web = sb(freeStore({ hvi_habits: JSON.stringify(
+      Array.from({ length: 40 }, (_, i) => ({ id: 'h' + i }))) }));
+    r.check('not native', run(web, 'isNativeBuild()') === false);
+    r.check('still free tier', run(web, 'isPremium()') === false,
+      '(paywall removed from the web build too)');
+    r.check('limit still applies', run(web, 'canAddHabit()') === false);
+  }
+
   return r.finish();
 };

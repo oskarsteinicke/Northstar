@@ -62,7 +62,17 @@ function _metaPlan() {
   } catch {}
   return null;
 }
+// Google Play requires Google Play Billing for digital purchases in apps
+// distributed there. Arete charges through Stripe, so rather than route Android
+// users into a checkout that violates that policy, the native build ships with
+// everything unlocked. This is the gate for the whole paywall: with it true,
+// none of the upgrade prompts below can be reached.
+function isNativeBuild() {
+  try { return !!(typeof window !== 'undefined' && window.Capacitor); } catch { return false; }
+}
+
 function getUserPlan() {
+  if (isNativeBuild()) return 'premium';                               // see isNativeBuild
   if (_metaPlan()) return 'premium';                                   // server of truth
   const local = localStorage.getItem('hvi_plan');
   if (local === 'premium' || local === 'pro' || local === 'elite') return 'premium';
@@ -203,7 +213,12 @@ function setBilling(b) {
   if (wrap) wrap.outerHTML = _billingToggleHTML();
 }
 
-function showUpgradeModal(feature) {
+function showUpgradeModal(context) {
+  if (isNativeBuild()) return;      // no Stripe checkout in a Play Store build
+  return _showUpgradeModal(context);
+}
+
+function _showUpgradeModal(feature) {
   const existing = document.getElementById('premium-modal');
   if (existing) existing.remove();
 
@@ -344,6 +359,12 @@ function _showUpgradeSuccess() {
 
 // ── PROFILE SETTINGS CARD ───────────────────────────────────────────────────
 function renderPremiumSettingsCard() {
+  if (isNativeBuild()) {
+    return `<div class="pw-status pw-status-founder">
+      <div class="pw-status-row"><span class="pw-status-badge">\u2b50 Premium</span><span class="pw-status-plan">Included</span></div>
+      <div class="pw-status-note">Every feature is unlocked in the app. Nothing to subscribe to.</div>
+    </div>`;
+  }
   // Early accounts — server-granted, permanent, never billed
   if (isFounder()) {
     return `<div class="pw-status pw-status-founder">

@@ -3,9 +3,9 @@
 Copy each block straight into Play Console. Character limits noted; all are
 inside them.
 
-> **Read the blocker at the bottom before submitting.** The copy below describes
-> Arete with everything unlocked, which is both what Play policy requires here
-> and what the app currently is for existing users.
+> The Play Billing blocker described at the bottom is **fixed**: the native build
+> now ships with everything unlocked, so nothing routes an Android user to
+> Stripe. The copy below matches that. Leave "In-app purchases" unticked.
 
 ---
 
@@ -74,13 +74,24 @@ Arete is Greek for excellence. Living up to your potential, daily, in the things
 | Ads | No |
 | In-app purchases | **No** — see the blocker below |
 
-## Graphics still needed
+## Graphics
 
-| Asset | Size | Notes |
+All in `store-assets/`, checked against Play's rules: screenshots are min 320px
+on the short side, max 3840 on the long, and no more than 2x the short side.
+
+| File | Size | Use |
 |---|---|---|
-| App icon | 512x512 PNG | `icon-512.png` exists |
-| Feature graphic | 1024x500 PNG | Required. Does not exist yet. |
-| Phone screenshots | min 2, up to 8 | 1080x1920 or similar 16:9 |
+| `00-feature-graphic.png` | 1024x500 | Feature graphic |
+| `01-home.png` | 960x1920 | Home, character and readiness |
+| `02-habits.png` | 960x1920 | Habits and streaks |
+| `03-workout.png` | 960x1920 | Training and today's session |
+| `04-diet.png` | 960x1920 | Nutrition and macros |
+| `05-musclemap.png` | 960x1920 | Muscle map. The most distinctive screen. |
+| `06-character.png` | 960x1920 | Levels and progression |
+| `app-icon-512.png` | 512x512 | Store icon |
+
+Screenshots were taken from the real app with a month of plausible data seeded:
+ordinary numbers a committed person would actually log, nothing exaggerated.
 
 ## Data safety questionnaire
 
